@@ -119,32 +119,6 @@ export default function PaymentSuccessPage() {
             {t('subscription.subscriptionActivated')}
           </p>
 
-          {/* Subscription Details */}
-          {subscriptionData && (
-            <div className="bg-dark-elevated rounded-lg p-6 mb-6 text-left border border-white/5">
-              <h3 className="text-sm font-semibold text-brand-text-tertiary uppercase tracking-wider mb-4">
-                {t('subscription.subscriptionDetails')}
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-brand-text-secondary">{t('payment.plan')}:</span>
-                  <span className="text-white font-semibold">{subscriptionData.plan?.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-brand-text-secondary">{t('subscription.status')}:</span>
-                  <span className="text-green-400 font-semibold capitalize">
-                    {t(`subscription.${subscriptionData.subscription?.status}`)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-brand-text-secondary">{t('subscription.expiresOn')}:</span>
-                  <span className="text-white font-semibold">
-                    {new Date(subscriptionData.subscription?.endDate).toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Thank You Message */}
           <p className="text-brand-text-tertiary mb-6">

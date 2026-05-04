@@ -22,7 +22,7 @@ export default function CheckoutModal({ isOpen, onClose, plan, user }) {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/stripe/create-checkout-session`, {
+      const res = await fetch(`${API_URL}/payment/create-checkout-session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
