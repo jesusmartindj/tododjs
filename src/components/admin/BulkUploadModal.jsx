@@ -99,6 +99,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
   const computeStageLabel = (it) => {
     if (!it) return '';
     if (it.uploadStatus === 'idle') return 'Queued';
+    if (it.uploadStatus === 'server-queued') return 'Server queue — waiting';
     if (it.uploadStatus === 'uploading') return 'Uploading to server';
     if (it.uploadStatus === 'processing') {
       const p = it.processingProgress ?? 0;
@@ -116,6 +117,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     if (it.uploadStatus === 'failed') return 'bg-red-500/10 text-red-300 border-red-500/20';
     if (it.uploadStatus === 'completed') return 'bg-green-500/10 text-green-300 border-green-500/20';
     if (it.uploadStatus === 'uploading') return 'bg-blue-500/10 text-blue-300 border-blue-500/20';
+    if (it.uploadStatus === 'server-queued') return 'bg-orange-500/10 text-orange-300 border-orange-500/20';
     if (it.uploadStatus === 'processing') return 'bg-yellow-500/10 text-yellow-300 border-yellow-500/20';
     return 'bg-white/10 text-brand-text-tertiary border-white/10';
   };
@@ -125,6 +127,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     if (it.uploadStatus === 'uploading') return it.uploadProgress ?? 0;
     if (it.uploadStatus === 'processing') return it.processingProgress ?? 0;
     if (it.uploadStatus === 'completed') return 100;
+    if (it.uploadStatus === 'server-queued') return 0;
     return 0;
   };
 
@@ -178,6 +181,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     setUploading(true);
     setActiveItemIndex(idx);
     setUploadProgress(0);
+    cancelledItemsRef.current.delete(it.id);
     updateItem(idx, {
       uploadStatus: 'uploading',
       uploadError: '',
@@ -631,7 +635,6 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
           created: response.data,
           processingProgress: 0
         });
-        onSuccess?.(response.data);
 
         if (!newCollectionId) return;
 
@@ -667,12 +670,16 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                   processingDetail: processingDetail ?? '',
                   tracksProcessed: tracksProcessed ?? 0,
                   totalTracksEstimate: totalTracksEstimate ?? 0,
-                  uploadStatus: status === 'completed' ? 'completed' : status === 'failed' ? 'failed' : 'processing',
+                  uploadStatus: status === 'completed' ? 'completed'
+                    : status === 'failed' ? 'failed'
+                    : status === 'queued' ? 'server-queued'
+                    : 'processing',
                   uploadError: status === 'failed' ? (errorMessage || 'Processing failed. Check server logs.') : ''
                 });
                 if (status === 'completed' || status === 'failed') {
                   clearInterval(interval);
                   pollIntervalByItemIdRef.current.delete(item.id);
+                  if (status === 'completed') onSuccess?.();
                   resolve();
                 }
               }

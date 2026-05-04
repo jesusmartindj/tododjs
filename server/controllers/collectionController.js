@@ -877,12 +877,16 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       await collection.save();
     }
 
+    // ZIP backup runs in parallel with track processing — never blocks progress.
+    // Tracks are individually saved to Wasabi during processing, so the ZIP is
+    // just a redundant source backup and does not need to complete first.
+    let zipBackupPromise = Promise.resolve();
     if (!opts.skipZipUpload) {
       const zipSizeGB = (fs.statSync(zipFilePath).size / (1024 * 1024 * 1024)).toFixed(2);
-      console.log(` Uploading ${zipSizeGB} GB ZIP to Wasabi...`);
+      console.log(` Queuing ${zipSizeGB} GB ZIP backup to Wasabi (parallel — not blocking track processing)...`);
       const zipKey = `collections/${collection.name}/original/${Date.now()}-${path.basename(zipFilePath)}`;
       let lastLoggedPct = 0;
-      const zipUpload = await uploadToWasabi(
+      zipBackupPromise = uploadToWasabi(
         fs.createReadStream(zipFilePath),
         zipKey,
         'application/zip',
@@ -890,24 +894,23 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
           const rounded = Math.floor(pct / 10) * 10;
           if (rounded > lastLoggedPct) {
             lastLoggedPct = rounded;
-            console.log(`   Wasabi ZIP upload: ${rounded}%`);
-          }
-          const progress = Math.min(4, Math.round((pct / 100) * 4));
-          if (progress > (collection.processingProgress || 0)) {
-            collection.processingProgress = progress;
-            Collection.findByIdAndUpdate(collectionId, { processingProgress: progress }).catch(() => {});
+            console.log(`   Wasabi ZIP backup: ${rounded}%`);
           }
         }
-      );
-      collection.zipUrl = zipUpload.location;
-      collection.zipKey = zipUpload.key;
-      collection.processingProgress = 5;
-      await collection.save();
-      console.log(` ZIP uploaded to Wasabi: ${collection.zipKey}`);
-    } else {
-      collection.processingProgress = Math.max(collection.processingProgress || 0, 5);
-      await collection.save();
+      )
+        .then(zipUpload => {
+          console.log(` ZIP backup complete: ${zipUpload.key}`);
+          return Collection.findByIdAndUpdate(collectionId, {
+            zipUrl: zipUpload.location,
+            zipKey: zipUpload.key
+          });
+        })
+        .catch(err => {
+          console.error('⚠️  ZIP backup to Wasabi failed (non-fatal, tracks are safe):', err.message);
+        });
     }
+    collection.processingProgress = 5;
+    await collection.save();
 
     // Open ZIP and find MP3 files
     const zipfile = await openZipFile(zipFilePath);
@@ -1584,6 +1587,8 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
     setImmediate(() => autoAssignThumbnails(collection._id).catch(() => {}));
     setImmediate(() => notifyAdminUncategorized(collection._id, collection.name).catch(() => {}));
 
+    // Wait for ZIP backup to finish before deleting the temp file
+    await zipBackupPromise;
     if (fs.existsSync(zipFilePath)) {
       fs.unlinkSync(zipFilePath);
       console.log(' Cleaned up temp ZIP file');
