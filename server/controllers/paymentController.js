@@ -37,6 +37,21 @@ export const createCheckoutSession = async (req, res) => {
     // Get or create Stripe customer
     let stripeCustomerId = req.user.subscription.stripeCustomerId;
 
+    if (stripeCustomerId) {
+      // Verify the customer still exists in Stripe (guards against test/live mode switches)
+      try {
+        await stripe.customers.retrieve(stripeCustomerId);
+      } catch (e) {
+        if (e.code === 'resource_missing') {
+          console.warn(`Stale stripeCustomerId ${stripeCustomerId} cleared for user ${req.user._id}`);
+          stripeCustomerId = null;
+          req.user.subscription.stripeCustomerId = null;
+        } else {
+          throw e;
+        }
+      }
+    }
+
     if (!stripeCustomerId) {
       const customer = await stripe.customers.create({
         email: req.user.email,
