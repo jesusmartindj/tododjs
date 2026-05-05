@@ -138,8 +138,12 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
         onSuccess(data.user);
       } else {
         setError(data.message || t('auth.biometricFailed'));
-        clearBiometric();
-        setBiometricRegistered(false);
+        // Only wipe the stored credential for genuine auth failures (user not found / inactive).
+        // Preserve it for transient server errors so the user doesn't lose their setup.
+        if (response.status === 401) {
+          clearBiometric();
+          setBiometricRegistered(false);
+        }
       }
     } catch (err) {
       if (err.name === 'NotAllowedError') {
