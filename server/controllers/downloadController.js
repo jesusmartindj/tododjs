@@ -149,6 +149,14 @@ export const downloadTrackFile = async (req, res) => {
       }
     }
 
+    // Verify audio file key exists BEFORE logging or incrementing counters
+    if (!track.audioFile?.key) {
+      return res.status(400).json({
+        success: false,
+        message: 'Track audio file is missing'
+      });
+    }
+
     // Log download
     const downloadDoc = {
       userId: user._id,
@@ -183,13 +191,6 @@ export const downloadTrackFile = async (req, res) => {
         source.totalDownloads += 1;
         await source.save();
       }
-    }
-
-    if (!track.audioFile?.key) {
-      return res.status(400).json({
-        success: false,
-        message: 'Track audio file is missing'
-      });
     }
 
     const filename = buildSafeFilename(`${track.artist || 'Unknown Artist'} - ${track.title || 'Unknown Title'}.mp3`);
@@ -234,13 +235,16 @@ export const downloadAlbum = async (req, res) => {
 
     const user = await User.findById(req.user.id);
 
-    // Check subscription (bulk downloads require at least premium)
-    if (user.subscription.plan === 'free') {
-      return res.status(403).json({
-        success: false,
-        message: 'Bulk album downloads require Premium or Pro subscription',
-        upgradeRequired: true
-      });
+    // Admin bypasses all subscription checks
+    if (user.role !== 'admin') {
+      const hasPlan = user.subscription?.planId || (user.subscription?.plan && user.subscription.plan !== 'free');
+      if (!hasPlan || user.subscription?.status !== 'active') {
+        return res.status(403).json({
+          success: false,
+          message: 'Bulk album downloads require an active subscription',
+          upgradeRequired: true
+        });
+      }
     }
 
     // Generate signed download URL for ZIP
