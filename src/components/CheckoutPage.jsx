@@ -221,6 +221,9 @@ export default function CheckoutPage({ onClose, selectedPlan }) {
               <p className="text-xs text-center text-brand-text-tertiary mt-4">
                 {t('checkout.stripeRedirect')}
               </p>
+              <p className="text-xs text-center text-brand-text-tertiary mt-2">
+                {t('pricing.billingNotice', 'Subscriptions are non-refundable. Cancel anytime to stop auto-renewal — you keep access until the end of your current billing period.')}
+              </p>
             </div>
 
             {/* Security Badges */}

@@ -139,6 +139,11 @@ export default function PricingPage({ onSelectPlan, user }) {
             ))}
           </div>
         </div>
+
+        {/* Billing notice */}
+        <p className="text-center text-xs text-brand-text-tertiary mt-10">
+          {t('pricing.billingNotice', 'Subscriptions are non-refundable. Cancel anytime to stop auto-renewal — you keep access until the end of your current billing period.')}
+        </p>
       </div>
     </div>
   );
