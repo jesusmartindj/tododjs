@@ -138,9 +138,11 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
         onSuccess(data.user);
       } else {
         setError(data.message || t('auth.biometricFailed'));
-        // Only wipe the stored credential for genuine auth failures (user not found / inactive).
-        // Preserve it for transient server errors so the user doesn't lose their setup.
-        if (response.status === 401) {
+        // Only wipe the stored credential when the user account itself is gone or inactive.
+        // "Device not recognised" (401) keeps the credential — user just needs to password-login once.
+        // Transient server errors (500) also keep the credential.
+        const accountGone = response.status === 401 && !data.message?.toLowerCase().includes('device');
+        if (accountGone) {
           clearBiometric();
           setBiometricRegistered(false);
         }

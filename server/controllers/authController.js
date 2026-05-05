@@ -550,9 +550,27 @@ export const biometricLogin = async (req, res) => {
       return res.status(400).json({ success: false, message: 'User ID required' });
     }
 
+    if (!deviceId) {
+      return res.status(400).json({ success: false, message: 'Device ID required' });
+    }
+
     const user = await User.findById(userId);
     if (!user || !user.isActive) {
       return res.status(401).json({ success: false, message: 'User not found or inactive' });
+    }
+
+    // For users who have registered devices, verify this device was previously
+    // authenticated with a password — prevents anyone with just a userId from
+    // obtaining a JWT via this public endpoint.
+    const registeredDevices = user.subscription?.devices || [];
+    if (registeredDevices.length > 0) {
+      const isKnownDevice = registeredDevices.some(d => d.deviceId === deviceId);
+      if (!isKnownDevice) {
+        return res.status(401).json({
+          success: false,
+          message: 'Device not recognised. Please login with your password first.'
+        });
+      }
     }
 
     await sendTokenResponse(user, 200, res, req);
