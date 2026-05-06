@@ -81,4 +81,10 @@ const mashupSchema = new mongoose.Schema({
 
 mashupSchema.index({ title: 'text', artist: 'text' });
 
+// Compound indexes covering getMashups query patterns.
+// Without these every mashup browse request does a full collection scan.
+mashupSchema.index({ isPublished: 1, createdAt: -1 });    // default sort by newest
+mashupSchema.index({ isPublished: 1, category: 1 });      // category filter
+mashupSchema.index({ isPublished: 1, genre: 1 });         // genre filter
+
 export default mongoose.model('Mashup', mashupSchema);

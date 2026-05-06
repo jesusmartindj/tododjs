@@ -203,4 +203,10 @@ trackSchema.pre('validate', function (next) {
 // Index for search
 trackSchema.index({ title: 'text', artist: 'text' });
 
+// Compound indexes covering browseTracks / libraryTracks query patterns.
+// Without these every browse request does a full collection scan.
+trackSchema.index({ status: 1, dateAdded: -1 });           // default sort by newest
+trackSchema.index({ status: 1, genre: 1, dateAdded: -1 }); // genre filter
+trackSchema.index({ status: 1, 'tonality.camelot': 1 });   // tonality filter
+
 export default mongoose.model('Track', trackSchema);
