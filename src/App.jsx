@@ -661,13 +661,19 @@ function App() {
       return;
     }
 
+    console.log("Initiating download for album:", albumId);
+
     const token = localStorage.getItem('token');
     const deviceId = getDeviceId();
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = `${API}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}&deviceId=${encodeURIComponent(deviceId)}`;
-    document.body.appendChild(iframe);
-    setTimeout(() => iframe.remove(), 120000);
+    // const iframe = document.createElement('iframe');
+    // iframe.style.display = 'none';
+    // iframe.src = `${API}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}&deviceId=${encodeURIComponent(deviceId)}`;
+    // console.log(" API CALL ", iframe.src)
+    // document.body.appendChild(iframe);
+    // setTimeout(() => iframe.remove(), 120000);
+
+    fetch(`${API}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}&deviceId=${encodeURIComponent(deviceId)}`)
+
   };
 
   const allTracks = useMemo(() => {
