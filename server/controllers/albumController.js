@@ -11,6 +11,14 @@ import AdmZip from 'adm-zip';
 import path from 'path';
 import { parseBuffer } from 'music-metadata';
 
+function withTimeout(promise, timeoutMs, timeoutValue) {
+  let timer;
+  const timeoutPromise = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(timeoutValue), timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+}
+
 // @desc    Upload album ZIP (single ZIP of MP3s) under a Source + DateCard
 // @route   POST /api/albums/upload
 // @access  Private/Admin
@@ -120,112 +128,138 @@ async function processAlbumTracksAsync(album, mp3Files, source, datePack, coverA
   await album.save();
 
   try {
-    // Upload ZIP to Wasabi for bulk download (in background)
+    // Upload ZIP to Wasabi for bulk download — run in background so it does NOT
+    // block per-track progress updates (large ZIPs can take minutes).
     if (zipFile) {
-      console.log(`   📦 Uploading ZIP to Wasabi...`);
       const zipKey = `sources/${source.name}-${source.year}/albums/${album.name}/album.zip`;
-      const zipUpload = await uploadToWasabi(zipFile.buffer, zipKey, 'application/zip');
-      album.zipUrl = zipUpload.location;
-      album.zipKey = zipUpload.key;
-      await album.save();
-      console.log(`   ✓ ZIP uploaded to Wasabi`);
+      console.log(`   📦 ZIP upload started in background (${(zipFile.size / 1024 / 1024).toFixed(1)} MB)...`);
+      uploadToWasabi(zipFile.buffer, zipKey, 'application/zip')
+        .then(zipUpload =>
+          Album.findByIdAndUpdate(album._id, { zipUrl: zipUpload.location, zipKey: zipUpload.key })
+            .then(() => console.log(`   ✓ ZIP uploaded to Wasabi`))
+        )
+        .catch(err => console.warn(`   ⚠ ZIP background upload failed:`, err.message));
     }
 
     for (const mp3Entry of mp3Files) {
       const mp3Buffer = mp3Entry.getData();
       const mp3Name = path.basename(mp3Entry.entryName);
 
-      let metadata = {
-        title: path.parse(mp3Name).name,
-        artist: 'Unknown Artist',
-        bpm: null,
-        duration: 0
-      };
-
-      let embeddedCoverUrl = null;
-      let embeddedCoverKey = null;
-
+      // Each track is wrapped in its own try-catch so a single failure
+      // (bad metadata, Wasabi blip, validation error) does NOT abort
+      // the remaining tracks in the album.
       try {
-        const musicMetadata = await parseBuffer(mp3Buffer, { mimeType: 'audio/mpeg' });
-        metadata = {
-          title: musicMetadata.common.title || metadata.title,
-          artist: musicMetadata.common.artist || metadata.artist,
-          bpm: musicMetadata.common.bpm || null,
-          duration: musicMetadata.format.duration || 0
+        let metadata = {
+          title: path.parse(mp3Name).name,
+          artist: 'Unknown Artist',
+          bpm: null,
+          duration: 0
         };
 
-        // Extract embedded cover art from ID3 tags
-        const pictures = musicMetadata.common.picture;
-        if (pictures && pictures.length > 0) {
-          const pic = pictures[0];
-          const ext = pic.format === 'image/png' ? '.png' : '.jpg';
-          const coverKey = `sources/${source.name}-${source.year}/albums/${album.name}/covers/${path.parse(mp3Name).name}${ext}`;
-          try {
-            const coverUploadResult = await uploadToWasabi(pic.data, coverKey, pic.format);
-            embeddedCoverUrl = coverUploadResult.location;
-            embeddedCoverKey = coverUploadResult.key;
-          } catch (coverErr) {
-            console.warn(`   ⚠ Failed to upload embedded cover for ${mp3Name}:`, coverErr.message);
+        let embeddedCoverUrl = null;
+        let embeddedCoverKey = null;
+
+        try {
+          const musicMetadata = await parseBuffer(mp3Buffer, { mimeType: 'audio/mpeg' });
+          metadata = {
+            title: musicMetadata.common.title || metadata.title,
+            artist: musicMetadata.common.artist || metadata.artist,
+            bpm: musicMetadata.common.bpm || null,
+            duration: musicMetadata.format.duration || 0
+          };
+
+          // Extract embedded cover art from ID3 tags
+          const pictures = musicMetadata.common.picture;
+          if (pictures && pictures.length > 0) {
+            const pic = pictures[0];
+            const ext = pic.format === 'image/png' ? '.png' : '.jpg';
+            const coverKey = `sources/${source.name}-${source.year}/albums/${album.name}/covers/${path.parse(mp3Name).name}${ext}`;
+            try {
+              const coverUploadResult = await uploadToWasabi(pic.data, coverKey, pic.format);
+              embeddedCoverUrl = coverUploadResult.location;
+              embeddedCoverKey = coverUploadResult.key;
+            } catch (coverErr) {
+              console.warn(`   ⚠ Failed to upload embedded cover for ${mp3Name}:`, coverErr.message);
+            }
           }
+        } catch (err) {
+          console.warn(`   ⚠ Metadata parsing failed for ${mp3Name}`);
         }
-      } catch (err) {
-        console.warn(`   ⚠ Metadata parsing failed for ${mp3Name}`);
+
+        // Tonality + BPM detection — wrapped with 45 s timeout so a hanging
+        // AI/Essentia worker does not stall the entire track loop.
+        const tonalityResult = await withTimeout(
+          detectTonality(mp3Buffer, metadata),
+          45000,
+          { tonality: null, detectedBpm: null }
+        );
+        const tonality = tonalityResult?.tonality || {
+          key: null, scale: null, camelot: null,
+          source: 'timeout', confidence: 0, needsManualReview: true
+        };
+        const detectedBpm = tonalityResult?.detectedBpm ?? null;
+        if (!metadata.bpm && detectedBpm) metadata.bpm = detectedBpm;
+
+        const genreResult = await withTimeout(
+          detectGenre(mp3Buffer, metadata),
+          45000,
+          { genre: null, confidence: 0, source: 'timeout', needsManualReview: true }
+        );
+
+        const trackKey = `sources/${source.name}-${source.year}/albums/${album.name}/${mp3Name}`;
+        const trackUpload = await uploadToWasabi(mp3Buffer, trackKey, 'audio/mpeg');
+
+        const trackCoverArt = embeddedCoverUrl || coverArtUrl;
+        // Bug fix: fall back to album.coverArtKey so the track inherits the
+        // album/source cover art key and signed URLs can be regenerated later.
+        const trackCoverArtKey = embeddedCoverKey || album.coverArtKey || null;
+
+        const track = await Track.create({
+          sourceId: source._id,
+          datePackId: datePack._id,
+          albumId: album._id,
+          title: metadata.title,
+          artist: metadata.artist,
+          genre: genreResult.genre || album.genre || source.name || 'House',
+          genreConfidence: genreResult.confidence,
+          genreSource: genreResult.source,
+          genreNeedsReview: genreResult.needsManualReview,
+          bpm: detectedBpm || metadata.bpm || 128,
+          tonality,
+          pool: source.name,
+          coverArt: trackCoverArt,
+          coverArtKey: trackCoverArtKey,
+          audioFile: {
+            url: trackUpload.location,
+            key: trackUpload.key,
+            format: 'MP3',
+            size: mp3Buffer.length,
+            duration: metadata.duration
+          },
+          versionType: 'Original Mix',
+          uploadedBy: userId,
+          status: 'published'
+        });
+
+        console.log(`   ✓ Track ${processedCount + 1}/${mp3Files.length}: ${metadata.title} (genre: ${track.genre})`);
+        totalSize += mp3Buffer.length;
+      } catch (trackErr) {
+        console.error(`   ❌ Failed to process track "${mp3Name}":`, trackErr.message);
       }
 
-      // Tonality + BPM detection (ID3 → Essentia.js audio analysis → AI fallback)
-      const { tonality, detectedBpm } = await detectTonality(mp3Buffer, metadata);
-      const genreResult = await detectGenre(mp3Buffer, metadata);
-
-      const trackKey = `sources/${source.name}-${source.year}/albums/${album.name}/${mp3Name}`;
-      const trackUpload = await uploadToWasabi(mp3Buffer, trackKey, 'audio/mpeg');
-
-      const trackCoverArt = embeddedCoverUrl || coverArtUrl;
-      const trackCoverArtKey = embeddedCoverKey || null;
-
-      const track = await Track.create({
-        sourceId: source._id,
-        datePackId: datePack._id,
-        albumId: album._id,
-        title: metadata.title,
-        artist: metadata.artist,
-        genre: genreResult.genre || album.genre || source.name || 'House',
-        genreConfidence: genreResult.confidence,
-        genreSource: genreResult.source,
-        genreNeedsReview: genreResult.needsManualReview,
-        bpm: detectedBpm || metadata.bpm || 128,
-        tonality,
-        pool: source.name,
-        coverArt: trackCoverArt,
-        coverArtKey: trackCoverArtKey,
-        audioFile: {
-          url: trackUpload.location,
-          key: trackUpload.key,
-          format: 'MP3',
-          size: mp3Buffer.length,
-          duration: metadata.duration
-        },
-        versionType: 'Original Mix',
-        uploadedBy: userId,
-        status: 'published'
-      });
-      
-      console.log(`   ✓ Created track with albumId: ${track.albumId}, genre: ${track.genre}`);
-
-      totalSize += mp3Buffer.length;
       processedCount++;
-      
-      // Update progress in real-time
+      // Update progress after every track (success or failure)
       const progress = Math.round((processedCount / mp3Files.length) * 100);
       album.processingProgress = progress;
       album.processedTracks = processedCount;
-      await album.save();
-      
-      console.log(`   ✓ Track ${processedCount}/${mp3Files.length}: ${metadata.title} (${progress}%)`);
+      try { await album.save(); } catch (saveErr) {
+        console.warn(`   ⚠ Progress save failed at ${progress}%:`, saveErr.message);
+      }
     }
 
     // Update album stats and mark as completed
     album.totalSize = totalSize;
-    album.trackCount = processedCount;
+    album.trackCount = await Track.countDocuments({ albumId: album._id });
     album.processingStatus = 'completed';
     album.processingProgress = 100;
     album.processedTracks = processedCount;
@@ -317,14 +351,29 @@ export const uploadTrackToAlbum = async (req, res) => {
       console.warn(`⚠ Metadata parsing failed for ${mp3File.originalname}`);
     }
 
-    const { tonality, detectedBpm } = await detectTonality(mp3File.buffer, metadata);
-    const genreResult = await detectGenre(mp3File.buffer, metadata);
+    const tonalityResult = await withTimeout(
+      detectTonality(mp3File.buffer, metadata),
+      45000,
+      { tonality: null, detectedBpm: null }
+    );
+    const tonality = tonalityResult?.tonality || {
+      key: null, scale: null, camelot: null,
+      source: 'timeout', confidence: 0, needsManualReview: true
+    };
+    const detectedBpm = tonalityResult?.detectedBpm ?? null;
+    if (!metadata.bpm && detectedBpm) metadata.bpm = detectedBpm;
+
+    const genreResult = await withTimeout(
+      detectGenre(mp3File.buffer, metadata),
+      45000,
+      { genre: null, confidence: 0, source: 'timeout', needsManualReview: true }
+    );
 
     const trackKey = `sources/${source?.name || 'unknown'}-${source?.year || '0'}/albums/${album.name}/${mp3File.originalname}`;
     const trackUpload = await uploadToWasabi(mp3File.buffer, trackKey, 'audio/mpeg');
 
     const trackCoverArt = embeddedCoverUrl || album.coverArt;
-    const trackCoverArtKey = embeddedCoverKey || null;
+    const trackCoverArtKey = embeddedCoverKey || album.coverArtKey || null;
 
     const track = await Track.create({
       sourceId: album.sourceId,
