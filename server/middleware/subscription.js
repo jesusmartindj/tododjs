@@ -21,22 +21,31 @@ export const requireSubscription = async (req, res, next) => {
     }
 
     const hasPlan = user.subscription.planId || (user.subscription.plan && user.subscription.plan !== 'free');
-    if (!hasPlan || user.subscription.status !== 'active') {
+
+    // Subscription expired — check endDate first before status
+    if (user.subscription.endDate && new Date() > new Date(user.subscription.endDate)) {
+      if (user.subscription.status !== 'expired') {
+        user.subscription.status = 'expired';
+        await user.save();
+      }
       return res.status(403).json({
         success: false,
-        message: 'Active subscription required',
+        message: 'Subscription expired',
         requiresSubscription: true
       });
     }
 
-    // Check if subscription expired
-    if (user.subscription.endDate && new Date() > user.subscription.endDate) {
-      user.subscription.status = 'expired';
-      await user.save();
-      
+    // Allow access if subscription is active OR was cancelled but period has not yet ended
+    const isWithinPeriod = !user.subscription.endDate || new Date() <= new Date(user.subscription.endDate);
+    const hasAccess =
+      user.subscription.status === 'active' ||
+      (user.subscription.status === 'cancelled' && isWithinPeriod) ||
+      (user.subscription.status === 'past_due' && isWithinPeriod);
+
+    if (!hasPlan || !hasAccess) {
       return res.status(403).json({
         success: false,
-        message: 'Subscription expired',
+        message: 'Active subscription required',
         requiresSubscription: true
       });
     }

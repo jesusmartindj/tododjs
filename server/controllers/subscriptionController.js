@@ -95,7 +95,9 @@ export const getSubscriptionStatus = async (req, res) => {
     const daysRemaining = user.subscription.endDate
       ? Math.max(0, Math.ceil((user.subscription.endDate - new Date()) / (1000 * 60 * 60 * 24)))
       : -1;
-    const isActive = status === 'active';
+    // Treat cancelled-but-within-period as effectively active (cancel_at_period_end retention)
+    const isWithinPeriod = !user.subscription.endDate || new Date() <= new Date(user.subscription.endDate);
+    const isActive = status === 'active' || (status === 'cancelled' && isWithinPeriod);
 
     res.status(200).json({
       success: true,
