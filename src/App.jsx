@@ -445,7 +445,10 @@ function App() {
       if (user.role !== 'admin') {
         const sub = user.subscription;
         const isPaid = sub && sub.plan && sub.plan !== 'free';
-        const isWithinPeriod = !sub?.endDate || new Date(sub.endDate) > new Date();
+        // isWithinPeriod: true only when a concrete future endDate exists.
+        // Intentionally false for null endDate — cancelled with no period has no access to retain.
+        const isWithinPeriod = !!sub?.endDate && new Date(sub.endDate) > new Date();
+        // Cancelled users keep access until their paid period expires (cancel_at_period_end retention)
         const isActive = sub && (
           sub.status === 'active' ||
           (sub.status === 'cancelled' && isWithinPeriod)
@@ -649,7 +652,10 @@ function App() {
     if (user.role !== 'admin') {
       const sub = user.subscription;
       const isPaid = sub && (sub.planId || (sub.plan && sub.plan !== 'free'));
-      const isWithinPeriod = !sub?.endDate || new Date(sub.endDate) > new Date();
+      // isWithinPeriod: true only when a concrete future endDate exists.
+      // Intentionally false for null endDate — cancelled with no period has no access to retain.
+      const isWithinPeriod = !!sub?.endDate && new Date(sub.endDate) > new Date();
+      // Cancelled users keep access until their paid period expires (cancel_at_period_end retention)
       const isActive = sub && (
         sub.status === 'active' ||
         (sub.status === 'cancelled' && isWithinPeriod)

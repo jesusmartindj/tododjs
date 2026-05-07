@@ -35,8 +35,16 @@ export const requireSubscription = async (req, res, next) => {
       });
     }
 
-    // Allow access if subscription is active OR was cancelled but period has not yet ended
-    const isWithinPeriod = !user.subscription.endDate || new Date() <= new Date(user.subscription.endDate);
+    // Access logic:
+    // - 'active'     → always allowed (includes cancel_at_period_end while Stripe still shows active)
+    // - 'cancelled'  → allowed ONLY if a concrete endDate exists AND it hasn't passed yet
+    //                  (user cancelled renewal but is still within their paid period)
+    // - 'past_due'   → allowed within period (Stripe retries payment; don't punish user yet)
+    // - anything else (expired, inactive, etc.) → denied
+    //
+    // NOTE: isWithinPeriod intentionally returns false when endDate is null/missing.
+    // A cancelled subscription with no endDate has no paid period to honour.
+    const isWithinPeriod = !!user.subscription.endDate && new Date() <= new Date(user.subscription.endDate);
     const hasAccess =
       user.subscription.status === 'active' ||
       (user.subscription.status === 'cancelled' && isWithinPeriod) ||
