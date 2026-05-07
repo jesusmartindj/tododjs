@@ -82,8 +82,11 @@ export default function MusicControlPanel({
   const volumeTimeoutRef = useRef(null);
 
   const { t } = useTranslation();
-  const isPremium = user?.role === 'admin' || !!(user?.subscription?.status === 'active' &&
-    (user?.subscription?.planId || (user?.subscription?.plan && user?.subscription?.plan !== 'free')));
+  const isWithinPeriod = !!(user?.subscription?.endDate) && new Date(user.subscription.endDate) > new Date();
+  const isPremium = user?.role === 'admin' || !!(
+    (user?.subscription?.planId || (user?.subscription?.plan && user?.subscription?.plan !== 'free')) &&
+    (user?.subscription?.status === 'active' || (user?.subscription?.status === 'cancelled' && isWithinPeriod))
+  );
 
   const totalSeconds = audioDuration || track?.duration || 0;
 
