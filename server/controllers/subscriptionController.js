@@ -210,10 +210,14 @@ export const cancelSubscription = async (req, res) => {
     const stripeSubscriptionId = user.subscription.stripeSubscriptionId;
     if (stripeSubscriptionId) {
       try {
-        await stripe.subscriptions.update(stripeSubscriptionId, {
+        const stripeSubscription = await stripe.subscriptions.update(stripeSubscriptionId, {
           cancel_at_period_end: true
         });
         user.subscription.cancelAtPeriodEnd = true;
+        // Sync endDate so isWithinPeriod check works correctly after cancellation
+        if (stripeSubscription.current_period_end) {
+          user.subscription.endDate = new Date(stripeSubscription.current_period_end * 1000);
+        }
       } catch (err) {
         console.error('[cancelSubscription] Stripe cancel failed:', err.message);
         // Proceed with local update even if Stripe call fails

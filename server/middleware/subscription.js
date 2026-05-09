@@ -1,7 +1,10 @@
+import Stripe from 'stripe';
 import User from '../models/User.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import { parseDeviceInfo, cleanupInactiveDevices } from '../utils/deviceParser.js';
 import { sendEmail, getDeviceBlockedEmailTemplate, getNewDeviceEmailTemplate } from '../services/emailService.js';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // Check if user has active subscription
 export const requireSubscription = async (req, res, next) => {
@@ -21,6 +24,23 @@ export const requireSubscription = async (req, res, next) => {
     }
 
     const hasPlan = user.subscription.planId || (user.subscription.plan && user.subscription.plan !== 'free');
+
+    // Stripe fallback: if cancelled + stripeSubscriptionId still set + endDate missing/stale,
+    // look up Stripe once to recover the real current_period_end and persist it.
+    // This recovers accounts cancelled with old code that never synced endDate.
+    if (
+      user.subscription.status === 'cancelled' &&
+      user.subscription.stripeSubscriptionId &&
+      (!user.subscription.endDate || new Date() > new Date(user.subscription.endDate))
+    ) {
+      try {
+        const stripeSub = await stripe.subscriptions.retrieve(user.subscription.stripeSubscriptionId);
+        if (stripeSub.current_period_end) {
+          user.subscription.endDate = new Date(stripeSub.current_period_end * 1000);
+          await user.save();
+        }
+      } catch (_) { /* Stripe lookup failed — proceed with existing data */ }
+    }
 
     // Subscription expired — check endDate first before status
     if (user.subscription.endDate && new Date() > new Date(user.subscription.endDate)) {

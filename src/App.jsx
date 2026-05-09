@@ -451,7 +451,8 @@ function App() {
         // Cancelled users keep access until their paid period expires (cancel_at_period_end retention)
         const isActive = sub && (
           sub.status === 'active' ||
-          (sub.status === 'cancelled' && isWithinPeriod)
+          (sub.status === 'cancelled' && isWithinPeriod) ||
+          (sub.status === 'past_due' && isWithinPeriod)
         );
 
         if (!isPaid || !isActive) {
@@ -658,7 +659,8 @@ function App() {
       // Cancelled users keep access until their paid period expires (cancel_at_period_end retention)
       const isActive = sub && (
         sub.status === 'active' ||
-        (sub.status === 'cancelled' && isWithinPeriod)
+        (sub.status === 'cancelled' && isWithinPeriod) ||
+        (sub.status === 'past_due' && isWithinPeriod)
       );
       if (!isPaid || !isActive) {
         navigate('/pricing');
