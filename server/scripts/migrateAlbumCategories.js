@@ -47,26 +47,28 @@ async function run() {
 
   for (const album of albums) {
     const result = await detectCategoryAsync(null, album.name);
+    const noMatch = !result.category || result.category === 'Others' || result.category === 'Premium Pack';
+    const finalCategory = noMatch ? 'Premium Pack' : result.category;
+    const finalRaw      = noMatch ? null : (result.raw || null);
 
-    if (!result.category || result.category === 'Others' || result.category === 'Premium Pack') {
+    if (noMatch) {
       skipped++;
-      continue;
+    } else {
+      console.log(`  "${album.name}" → ${finalCategory} (raw: "${finalRaw}")`);
+      updated++;
     }
-
-    console.log(`  "${album.name}" → ${result.category} (raw: "${result.raw}")`);
 
     if (!DRY_RUN) {
       await Album.updateOne({ _id: album._id }, {
-        $set: { category: result.category, categoryRaw: result.raw || null }
+        $set: { category: finalCategory, categoryRaw: finalRaw }
       });
       await Track.updateMany({ albumId: album._id }, {
-        $set: { category: result.category, categoryRaw: result.raw || null }
+        $set: { category: finalCategory, categoryRaw: finalRaw }
       });
     }
-    updated++;
   }
 
-  console.log(`\nDone. Updated: ${updated}, Skipped (no match): ${skipped}`);
+  console.log(`\nDone. Categorized: ${updated}, Set to Premium Pack (fallback): ${skipped}`);
   await mongoose.disconnect();
 }
 

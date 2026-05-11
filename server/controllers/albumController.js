@@ -539,7 +539,19 @@ export const getAlbums = async (req, res) => {
 
     // category filter — direct match on album.category field
     if (category && !sourceId) {
-      query.category = { $regex: `^${category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' };
+      const escaped = category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const exactRegex = { $regex: `^${escaped}$`, $options: 'i' };
+      // Premium Pack is the fallback — also include albums with no category set
+      if (/^premium\s*pack$/i.test(category)) {
+        query.$or = [
+          { category: exactRegex },
+          { category: null },
+          { category: '' },
+          { category: { $exists: false } }
+        ];
+      } else {
+        query.category = exactRegex;
+      }
     }
 
     if (search) {
