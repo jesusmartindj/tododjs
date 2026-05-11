@@ -95,7 +95,13 @@ export const getSubscriptionStatus = async (req, res) => {
     const daysRemaining = user.subscription.endDate
       ? Math.max(0, Math.ceil((user.subscription.endDate - new Date()) / (1000 * 60 * 60 * 24)))
       : -1;
-    const isActive = status === 'active';
+    // isActive = true when:
+    //   - status is 'active' (normal case, or cancel_at_period_end still pending)
+    //   - status is 'cancelled' AND a concrete future endDate exists
+    //     → user cancelled their renewal but is still within the paid billing period
+    // NOTE: isWithinPeriod is false when endDate is null — no paid period to retain.
+    const isWithinPeriod = !!user.subscription.endDate && new Date() <= new Date(user.subscription.endDate);
+    const isActive = status === 'active' || (status === 'cancelled' && isWithinPeriod);
 
     res.status(200).json({
       success: true,
@@ -204,10 +210,14 @@ export const cancelSubscription = async (req, res) => {
     const stripeSubscriptionId = user.subscription.stripeSubscriptionId;
     if (stripeSubscriptionId) {
       try {
-        await stripe.subscriptions.update(stripeSubscriptionId, {
+        const stripeSubscription = await stripe.subscriptions.update(stripeSubscriptionId, {
           cancel_at_period_end: true
         });
         user.subscription.cancelAtPeriodEnd = true;
+        // Sync endDate so isWithinPeriod check works correctly after cancellation
+        if (stripeSubscription.current_period_end) {
+          user.subscription.endDate = new Date(stripeSubscription.current_period_end * 1000);
+        }
       } catch (err) {
         console.error('[cancelSubscription] Stripe cancel failed:', err.message);
         // Proceed with local update even if Stripe call fails

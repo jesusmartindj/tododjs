@@ -1,7 +1,10 @@
+import Stripe from 'stripe';
 import User from '../models/User.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import { parseDeviceInfo, cleanupInactiveDevices } from '../utils/deviceParser.js';
-import { sendEmail } from '../services/emailService.js';
+import { sendEmail, getDeviceBlockedEmailTemplate, getNewDeviceEmailTemplate } from '../services/emailService.js';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // Check if user has active subscription
 export const requireSubscription = async (req, res, next) => {
@@ -21,22 +24,56 @@ export const requireSubscription = async (req, res, next) => {
     }
 
     const hasPlan = user.subscription.planId || (user.subscription.plan && user.subscription.plan !== 'free');
-    if (!hasPlan || user.subscription.status !== 'active') {
+
+    // Stripe fallback: if cancelled + stripeSubscriptionId still set + endDate missing/stale,
+    // look up Stripe once to recover the real current_period_end and persist it.
+    // This recovers accounts cancelled with old code that never synced endDate.
+    if (
+      user.subscription.status === 'cancelled' &&
+      user.subscription.stripeSubscriptionId &&
+      (!user.subscription.endDate || new Date() > new Date(user.subscription.endDate))
+    ) {
+      try {
+        const stripeSub = await stripe.subscriptions.retrieve(user.subscription.stripeSubscriptionId);
+        if (stripeSub.current_period_end) {
+          user.subscription.endDate = new Date(stripeSub.current_period_end * 1000);
+          await user.save();
+        }
+      } catch (_) { /* Stripe lookup failed — proceed with existing data */ }
+    }
+
+    // Subscription expired — check endDate first before status
+    if (user.subscription.endDate && new Date() > new Date(user.subscription.endDate)) {
+      if (user.subscription.status !== 'expired') {
+        user.subscription.status = 'expired';
+        await user.save();
+      }
       return res.status(403).json({
         success: false,
-        message: 'Active subscription required',
+        message: 'Subscription expired',
         requiresSubscription: true
       });
     }
 
-    // Check if subscription expired
-    if (user.subscription.endDate && new Date() > user.subscription.endDate) {
-      user.subscription.status = 'expired';
-      await user.save();
-      
+    // Access logic:
+    // - 'active'     → always allowed (includes cancel_at_period_end while Stripe still shows active)
+    // - 'cancelled'  → allowed ONLY if a concrete endDate exists AND it hasn't passed yet
+    //                  (user cancelled renewal but is still within their paid period)
+    // - 'past_due'   → allowed within period (Stripe retries payment; don't punish user yet)
+    // - anything else (expired, inactive, etc.) → denied
+    //
+    // NOTE: isWithinPeriod intentionally returns false when endDate is null/missing.
+    // A cancelled subscription with no endDate has no paid period to honour.
+    const isWithinPeriod = !!user.subscription.endDate && new Date() <= new Date(user.subscription.endDate);
+    const hasAccess =
+      user.subscription.status === 'active' ||
+      (user.subscription.status === 'cancelled' && isWithinPeriod) ||
+      (user.subscription.status === 'past_due' && isWithinPeriod);
+
+    if (!hasPlan || !hasAccess) {
       return res.status(403).json({
         success: false,
-        message: 'Subscription expired',
+        message: 'Active subscription required',
         requiresSubscription: true
       });
     }
@@ -112,26 +149,9 @@ export const checkDeviceLimit = async (req, res, next) => {
       const deviceInfo = parseDeviceInfo(userAgent);
 
       try {
-        await sendEmail({
-          to: user.email,
-          subject: '⚠️ Access Blocked — Device Limit Reached',
-          html: `
-            <h2>Unrecognized Device Blocked</h2>
-            <p>Hi ${user.name},</p>
-            <p>An unrecognized device tried to access your <strong>TodoDJS</strong> account, but your plan only allows <strong>${plan.features.maxDevices} device${plan.features.maxDevices > 1 ? 's' : ''}</strong>.</p>
-            <h3>Blocked Device Details</h3>
-            <ul>
-              <li><strong>Device:</strong> ${deviceInfo.deviceName}</li>
-              <li><strong>Browser:</strong> ${deviceInfo.browser}</li>
-              <li><strong>OS:</strong> ${deviceInfo.os}</li>
-              <li><strong>IP Address:</strong> ${ipAddress}</li>
-              <li><strong>Time:</strong> ${new Date().toLocaleString()}</li>
-            </ul>
-            <p>To allow a new device, sign in and remove one of your existing devices from your account settings.</p>
-            <p>If this was <strong>not you</strong>, your account is secure — the access was blocked.</p>
-            <p><a href="https://tododjs.com" style="color:#7C3AED">Manage Your Devices →</a></p>
-          `
-        });
+        const lang = user.preferredLanguage || 'es';
+        const { subject, html, text } = getDeviceBlockedEmailTemplate(user, plan.features.maxDevices, deviceInfo, ipAddress, lang);
+        await sendEmail({ to: user.email, subject, html, text });
       } catch (emailError) {
         console.error('Failed to send device block email:', emailError);
       }
@@ -168,23 +188,9 @@ export const checkDeviceLimit = async (req, res, next) => {
 
     // Send email notification for new device
     try {
-      await sendEmail({
-        to: user.email,
-        subject: 'New Device Added to Your Account',
-        html: `
-          <h2>New Device Registered</h2>
-          <p>Hi ${user.name},</p>
-          <p>A new device was added to your TodoDJS account:</p>
-          <ul>
-            <li><strong>Device:</strong> ${deviceInfo.deviceName}</li>
-            <li><strong>Type:</strong> ${deviceInfo.deviceType}</li>
-            <li><strong>IP Address:</strong> ${ipAddress2}</li>
-            <li><strong>Time:</strong> ${new Date().toLocaleString()}</li>
-          </ul>
-          <p>If this wasn't you, please sign out all devices immediately from your account settings.</p>
-          <p>You can manage your devices at any time from your dashboard.</p>
-        `
-      });
+      const lang = user.preferredLanguage || 'es';
+      const { subject, html, text } = getNewDeviceEmailTemplate(user, deviceInfo, ipAddress2, lang);
+      await sendEmail({ to: user.email, subject, html, text });
     } catch (emailError) {
       console.error('Failed to send new device email:', emailError);
       // Don't block the request if email fails

@@ -58,10 +58,11 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
   const [downloadingZip, setDownloadingZip] = useState(false);
 
   const isAdmin = user?.role === 'admin';
+  const isWithinPeriod = !!(user?.subscription?.endDate) && new Date(user.subscription.endDate) > new Date();
   const isPremium = isAdmin || (
     user &&
     (user.subscription?.planId || (user.subscription?.plan && user.subscription.plan !== 'free')) &&
-    user.subscription?.status === 'active'
+    (user.subscription?.status === 'active' || (user.subscription?.status === 'cancelled' && isWithinPeriod))
   );
   const autoPlayTriggered = useRef(false);
 
@@ -117,24 +118,48 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
 
   const handleDownloadZip = useCallback(async () => {
     if (!album || !requireAuth('downloadZip')) return;
+
+    const albumId = album.id || album._id;
+    if (!albumId) return;
+
     setDownloadingZip(true);
     try {
-      const token = localStorage.getItem('token');
-      const deviceId = getDeviceId();
-      const albumId = album.id || album._id;
-      if (!albumId) throw new Error('Album id is missing');
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = `${API_URL}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}&deviceId=${encodeURIComponent(deviceId)}`;
-      document.body.appendChild(iframe);
-      setTimeout(() => iframe.remove(), 120000);
+      const response = await apiFetch(`${API_URL}/downloads/album/${albumId}/file`);
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.message || `Download failed (${response.status})`);
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+
+      if (contentType.includes('application/json')) {
+        // Pre-built ZIP: server returns a signed Wasabi URL
+        const data = await response.json();
+        if (data?.downloadUrl) {
+          triggerDownload(data.downloadUrl);
+        } else {
+          throw new Error('No download URL returned');
+        }
+      } else {
+        // On-the-fly ZIP: server streams the archive directly
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `${album.name || 'Album'}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      }
     } catch (err) {
       console.error('ZIP download failed:', err);
       alert(err.message || t('album.downloadFailed'));
     } finally {
       setDownloadingZip(false);
     }
-  }, [album, requireAuth]);
+  }, [album, requireAuth, t]);
 
   const toggleLike = useCallback((track, e) => {
     e?.stopPropagation();

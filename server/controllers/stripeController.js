@@ -420,7 +420,18 @@ async function handleSubscriptionUpdated(subscription) {
 
   let changed = false;
 
-  const newStatus = statusMap[subscription.status];
+  let newStatus = statusMap[subscription.status];
+
+  // Guard: if Stripe reports 'canceled' but current_period_end is still in the future,
+  // do NOT set status to 'cancelled' yet — the paid period is still active.
+  // customer.subscription.deleted will fire at actual period end to finalize cancellation.
+  if (newStatus === 'cancelled' && subscription.current_period_end) {
+    const periodEnd = new Date(subscription.current_period_end * 1000);
+    if (periodEnd > new Date()) {
+      newStatus = 'active';
+    }
+  }
+
   if (newStatus && user.subscription.status !== newStatus) {
     user.subscription.status = newStatus;
     changed = true;

@@ -444,11 +444,18 @@ function App() {
       // Admin bypasses all subscription restrictions
       if (user.role !== 'admin') {
         const sub = user.subscription;
-        const isPaid = sub && sub.plan && sub.plan !== 'free';
-        const isActive = sub && sub.status === 'active';
-        const notExpired = !sub?.currentPeriodEnd || new Date(sub.currentPeriodEnd) > new Date();
+        const isPaid = sub && (sub.planId || (sub.plan && sub.plan !== 'free'));
+        // isWithinPeriod: true only when a concrete future endDate exists.
+        // Intentionally false for null endDate — cancelled with no period has no access to retain.
+        const isWithinPeriod = !!sub?.endDate && new Date(sub.endDate) > new Date();
+        // Cancelled users keep access until their paid period expires (cancel_at_period_end retention)
+        const isActive = sub && (
+          sub.status === 'active' ||
+          (sub.status === 'cancelled' && isWithinPeriod) ||
+          (sub.status === 'past_due' && isWithinPeriod)
+        );
 
-        if (!isPaid || !isActive || !notExpired) {
+        if (!isPaid || !isActive) {
           navigate('/pricing');
           return;
         }
@@ -637,7 +644,7 @@ function App() {
     }
   };
 
-  const handleAlbumDownload = (album) => {
+  const handleAlbumDownload = async (album) => {
     if (!user) {
       setAuthModalOpen(true);
       return;
@@ -645,11 +652,17 @@ function App() {
 
     if (user.role !== 'admin') {
       const sub = user.subscription;
-      const isPaid = sub && sub.plan && sub.plan !== 'free';
-      const isActive = sub && sub.status === 'active';
-      const notExpired = !sub?.currentPeriodEnd || new Date(sub.currentPeriodEnd) > new Date();
-
-      if (!isPaid || !isActive || !notExpired) {
+      const isPaid = sub && (sub.planId || (sub.plan && sub.plan !== 'free'));
+      // isWithinPeriod: true only when a concrete future endDate exists.
+      // Intentionally false for null endDate — cancelled with no period has no access to retain.
+      const isWithinPeriod = !!sub?.endDate && new Date(sub.endDate) > new Date();
+      // Cancelled users keep access until their paid period expires (cancel_at_period_end retention)
+      const isActive = sub && (
+        sub.status === 'active' ||
+        (sub.status === 'cancelled' && isWithinPeriod) ||
+        (sub.status === 'past_due' && isWithinPeriod)
+      );
+      if (!isPaid || !isActive) {
         navigate('/pricing');
         return;
       }
@@ -661,19 +674,44 @@ function App() {
       return;
     }
 
-    console.log("Initiating download for album:", albumId);
 
-    const token = localStorage.getItem('token');
-    const deviceId = getDeviceId();
-    // const iframe = document.createElement('iframe');
-    // iframe.style.display = 'none';
-    // iframe.src = `${API}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}&deviceId=${encodeURIComponent(deviceId)}`;
-    // console.log(" API CALL ", iframe.src)
-    // document.body.appendChild(iframe);
-    // setTimeout(() => iframe.remove(), 120000);
+    try {
+      const response = await apiFetch(`${API}/downloads/album/${albumId}/file`);
 
-    fetch(`${API}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}&deviceId=${encodeURIComponent(deviceId)}`)
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.message || `Download failed (${response.status})`);
+      }
 
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await response.json();
+        if (data?.downloadUrl) {
+          const a = document.createElement('a');
+          a.href = data.downloadUrl;
+          a.rel = 'noopener';
+          a.download = '';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } else {
+          throw new Error('No download URL returned');
+        }
+      } else {
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `${album.name || 'Album'}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      }
+    } catch (err) {
+      console.error('Album download failed:', err);
+      alert(err.message || 'Download failed. Please try again.');
+    }
   };
 
   const allTracks = useMemo(() => {
