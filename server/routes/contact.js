@@ -18,11 +18,11 @@ Message:
 ${message}
   `;
 
-  // await sendEmail({
-  //   to: ['contacto.tododjs@gmail.com','support@tododjs.com'],
-  //   subject: 'Contact Form Submission from [' + name + '] / [' + email + ']',
-  //   text
-  // });
+  await sendEmail({
+    to: ['contacto.tododjs@gmail.com','support@tododjs.com'],
+    subject: 'Contact Form Submission from [' + name + '] / [' + email + ']',
+    text
+  });
   return res.status(200).json({ message: 'Contact form submitted successfully!' });
 });
 

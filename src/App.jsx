@@ -19,6 +19,8 @@ import AlbumsSection from './components/AlbumsSection';
 import PlaylistsSection from './components/PlaylistsSection';
 import TrackListView from './components/TrackListView';
 import AlbumDetailView from './components/AlbumDetailView';
+import {  Mail } from 'lucide-react';
+
 
 // Lazy-loaded pages for code splitting
 const LibraryPage = lazy(() => import('./components/LibraryPage'));
@@ -907,7 +909,8 @@ function App() {
         <div>
           <button class="p-2 rounded-lg transition-all duration-200 bg-accent text-white shadow-lg shadow-accent/30 fixed bottom-0 right-0 m-4 z-50 hover:scale-105" 
             onClick={() => setContactModalOpen(true)}>
-            Contacto
+                          <Mail size={20} className="text-brand-text-tertiary" />
+
           </button>
         </div>
         </main>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Mail, Lock, User, Eye, EyeOff, AlertCircle, Phone, Globe, Fingerprint, Loader } from 'lucide-react';
+import { X, Mail, Lock, User, Eye, EyeOff, AlertCircle, CheckCircle, Phone, Globe, Fingerprint, Loader } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import API_URL from '../config/api';
 
@@ -10,6 +10,7 @@ export default function ContactModal({ onClose, onSuccess, initialMode = 'login'
   const [privacyPolicy, setPrivacyPolicy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
 
 
 
@@ -35,7 +36,7 @@ export default function ContactModal({ onClose, onSuccess, initialMode = 'login'
         throw new Error(errorData.message || 'Error al enviar el formulario');
       }
 
-      onSuccess();
+      setSuccess(true);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -62,6 +63,14 @@ export default function ContactModal({ onClose, onSuccess, initialMode = 'login'
             <span>{error}</span>
           </div>
         )}
+
+        {success && (
+          <div className="mb-4 p-4 bg-green-500/20 border border-green-500 rounded-lg flex items-center gap-2 text-green-500">
+            <CheckCircle size={20} />
+            <span>Formulario enviado con éxito. Te responderemos lo antes posible.</span>
+          </div>
+        )}
+        
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -133,8 +142,8 @@ export default function ContactModal({ onClose, onSuccess, initialMode = 'login'
             </label>
           </div>
 
-          <div>
-
+          <div  className="text-sm text-brand-text-tertiary text-justify bg-white/5 p-2 border border-dashed rounded border-white/10">
+Te responderemos lo antes posible. Si tienes alguna duda, puedes escribirnos a <a href="mailto:contacto.tododjs@gmail.com">contacto.tododjs@gmail.com</a>, <a href="mailto:support@tododjs.com">support@tododjs.com</a> o por Instagram: <a href="https://www.instagram.com/todo_djs" target="_blank" rel="noopener noreferrer">@todo_djs</a>
           </div>
 
           <button
