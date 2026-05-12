@@ -214,13 +214,15 @@ export const autoCategorizeMashups = async (req, res) => {
   try {
     const { force = false, dryRun = false, useAI = true } = req.body;
 
-    const OLD_GENRE_CATS = new Set(['Reggaeton', 'Old School Reggaeton', 'Dembow', 'Trap', 'House', 'EDM', 'Afro House', 'Remember', 'International']);
+    const GENRE_CATS = new Set(['Reggaeton', 'Old School Reggaeton', 'Dembow', 'Trap', 'House', 'EDM', 'Afro House', 'Remember', 'International']);
+    // Target mashups that don't yet have a valid genre category
     const filter = force
       ? {}
-      : { $or: [{ category: { $exists: false } }, { category: null }, { category: '' }, { category: { $in: [...OLD_GENRE_CATS] } }, { category: 'Others' }] };
+      : { $or: [{ category: { $exists: false } }, { category: null }, { category: '' }, { category: 'Others' }, { category: { $nin: [...GENRE_CATS] } }] };
 
     const mashups = await Mashup.find(filter).lean();
-    const knownNames = await getKnownCategoryNames();
+    // Use genre category names for AI — independent from Record Pool
+    const knownNames = [...GENRE_CATS];
 
     const results = [];
     let updated = 0;

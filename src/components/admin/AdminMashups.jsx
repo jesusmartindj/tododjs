@@ -196,7 +196,7 @@ export default function AdminMashups() {
   const fetchPoolCategories = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API}/categories`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API}/mashup-categories?all=true`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (data.success) setPoolCategories(data.data || []);
     } catch {}
@@ -563,7 +563,14 @@ export default function AdminMashups() {
               Auto-Categorize Mashups
             </h3>
             <p className="text-xs text-brand-text-tertiary mt-1">
-              Scans title + artist of every mashup, detects the correct category and cleans up the title professionally.
+              Scans title + artist of every mashup, detects the genre category and cleans up the title professionally.
+              {(() => {
+                const GENRE_CATS = new Set(['Reggaeton','Old School Reggaeton','Dembow','Trap','House','EDM','Afro House','Remember','International']);
+                const uncatCount = mashups.filter(m => !m.category || m.category === 'Others' || !GENRE_CATS.has(m.category)).length;
+                return uncatCount > 0
+                  ? <span className="ml-1 text-amber-400 font-medium">{uncatCount} mashup{uncatCount !== 1 ? 's' : ''} need categorizing.</span>
+                  : <span className="ml-1 text-green-400">All categorized ✓</span>;
+              })()}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -708,20 +715,20 @@ export default function AdminMashups() {
         )}
       </div>
 
-      {/* ── Pool-Brand Categories ── */}
+      {/* ── Mashup Genre Categories ── */}
       <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-white flex items-center gap-2">
             <Tag className="w-4 h-4 text-accent" />
-            Mashup Categories
-            <span className="text-xs font-normal text-brand-text-tertiary ml-1">— filters on Live Mashup page</span>
+            Mashup Genre Categories
+            <span className="text-xs font-normal text-brand-text-tertiary ml-1">— filter pills on Live Mashup page</span>
           </h3>
           <span className="text-[10px] text-brand-text-tertiary bg-white/5 border border-white/10 rounded-full px-2.5 py-1">
-            Managed in Admin → Categories
+            Manage in Admin → Mashup Categories
           </span>
         </div>
         {poolCategories.length === 0 ? (
-          <p className="text-xs text-brand-text-tertiary">Loading categories…</p>
+          <p className="text-xs text-brand-text-tertiary">No mashup categories yet — go to <strong>Admin → Mashup Categories</strong> and click <em>Seed Defaults</em>.</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {poolCategories.map((cat) => (
@@ -741,9 +748,11 @@ export default function AdminMashups() {
             ))}
           </div>
         )}
-        <p className="text-[10px] text-brand-text-tertiary/60 mt-3">
-          Only categories with at least 1 mashup appear as filter pills on the Live Mashup page. Run <span className="font-mono bg-white/10 px-1 rounded">Auto-Categorize</span> above to tag existing mashups.
-        </p>
+        {poolCategories.length > 0 && (
+          <p className="text-[10px] text-brand-text-tertiary/60 mt-3">
+            Categories with 0 mashups are hidden on the Live Mashup page. Use <strong>Auto-Categorize</strong> above or bulk-select mashups below to assign categories.
+          </p>
+        )}
       </div>
 
       {/* ── Upload New Mashup ── */}
