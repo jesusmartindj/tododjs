@@ -5,6 +5,7 @@ import TopBar from './components/TopBar';
 import Sidebar from './components/Sidebar';
 import SearchOverlay from './components/SearchOverlay';
 import AuthModal from './components/auth/AuthModal';
+import ContactModal from './components/ContactModal';
 import { authService } from './services/authService';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useUpload } from './context/UploadContext';
@@ -120,6 +121,7 @@ function App() {
   const [searchResults, setSearchResults] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [panelTrack, setPanelTrack] = useState(null);
@@ -902,6 +904,12 @@ function App() {
         ) : null}
         </Suspense>
         </ErrorBoundary>
+        <div>
+          <button class="p-2 rounded-lg transition-all duration-200 bg-accent text-white shadow-lg shadow-accent/30 fixed bottom-0 right-0 m-4 z-50 hover:scale-105" 
+            onClick={() => setContactModalOpen(true)}>
+            Contacto
+          </button>
+        </div>
         </main>
       </div>
 
@@ -1015,6 +1023,13 @@ function App() {
         <AuthModal 
           onClose={handleCloseAuth}
           onSuccess={handleAuthSuccess}
+        />
+      )}
+
+      {contactModalOpen && (
+        <ContactModal 
+          onClose={() => setContactModalOpen(false)}
+          onSuccess={() => setContactModalOpen(false)}
         />
       )}
 
