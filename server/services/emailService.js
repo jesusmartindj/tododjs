@@ -26,7 +26,7 @@ const UNSUBSCRIBE_EMAIL = process.env.RESEND_UNSUBSCRIBE_EMAIL || 'support@todod
 /**
  * Send an email via Resend
  */
-export async function sendEmail({ to, subject, html, text, replyTo, headers }) {
+export async function sendEmail({ to, subject, html, text, replyTo, headers, attachements }) {
   try {
     const payload = {
       from: FROM_EMAIL,
@@ -35,6 +35,7 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers }) {
       subject,
       html,
       text,
+      attachments: attachements || []
     };
     if (headers && Object.keys(headers).length > 0) payload.headers = headers;
     const { data, error } = await resend.emails.send(payload);
