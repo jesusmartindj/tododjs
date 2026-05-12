@@ -20,6 +20,7 @@ import PlaylistsSection from './components/PlaylistsSection';
 import TrackListView from './components/TrackListView';
 import AlbumDetailView from './components/AlbumDetailView';
 import {  Mail } from 'lucide-react';
+import { motion } from "framer-motion";
 
 
 // Lazy-loaded pages for code splitting
@@ -41,6 +42,7 @@ const SubscriptionDashboard = lazy(() => import('./components/SubscriptionDashbo
 const CategoryTrackSection = lazy(() => import('./components/CategoryTrackSection'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 import API_URL from './config/api';
+import { use } from 'react';
 
 const API = API_URL;
 
@@ -142,6 +144,8 @@ function App() {
   const [albumDetailTracks, setAlbumDetailTracks] = useState([]);
   const [albumDetailLoading, setAlbumDetailLoading] = useState(false);
   const [albumAutoPlay, setAlbumAutoPlay] = useState(false);
+  const onDragStartRef = useRef(null);
+  
 
   // Clear album detail when navigating away from the record-pool page
   useEffect(() => {
@@ -749,6 +753,25 @@ function App() {
     );
   }
 
+  // useEffect(() => {
+
+  //   let x = 0;
+  //   let y = 0;
+
+  //   interact( contactButtonRef.current ).draggable({
+  //     listeners: {
+  //       move(event) {
+  //         x += event.dx;
+  //         y += event.dy;
+
+  //         event.target.style.transform =
+  //           `translate(${x}px, ${y}px)`;
+  //       }
+  //     }
+  //   });
+
+  // }, [])
+
   return (
     <PlayerContext.Provider value={playerContextValue}>
     <div className="min-h-screen bg-dark-bg relative overflow-x-hidden">
@@ -906,12 +929,34 @@ function App() {
         ) : null}
         </Suspense>
         </ErrorBoundary>
-        <div>
-          <button className="p-2 ps-5 pe-5 rounded-lg transition-all duration-200 bg-accent text-white shadow-lg shadow-accent/30 fixed bottom-0 right-0 m-4 z-50 hover:scale-105 flex items-center gap-2 z-50" 
-            onClick={() => setContactModalOpen(true)}>
-              <Mail size={30} className="text-brand-text-tertiary" /> Contacto
-          </button>
-        </div>
+        
+        <motion.div
+          drag
+          dragMomentum={false}
+          className="fixed bottom-5 right-10 z-50"
+          onDragStart={() => {
+            onDragStartRef.current = true;
+          }}
+          onDragEnd={(event, info) => {
+            onDragStartRef.current = false;
+            event.stopPropagation();
+          }}>
+
+            <button className="p-2 ps-5 pe-5 rounded-lg transition-all duration-200 bg-accent text-white shadow-lg shadow-accent/30 m-4 z-50 hover:scale-105 flex items-center gap-2 z-50" 
+              onMouseUp={() => {
+                if( onDragStartRef.current ) {
+                  onDragStartRef.current = false;
+                  return;
+                }
+                setContactModalOpen(true)
+              }}
+              >
+                <Mail size={30} className="text-brand-text-tertiary" /> Contacto
+            </button>
+
+        </motion.div>
+
+
         </main>
       </div>
 
