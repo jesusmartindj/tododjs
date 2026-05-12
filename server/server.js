@@ -33,6 +33,7 @@ import subscriptionRoutes from './routes/subscriptions.js';
 import stripeRoutes from './routes/stripe.js';
 import deviceRoutes from './routes/device.js';
 import categoryRoutes from './routes/category.js';
+import contactRoutes from './routes/contact.js';
 
 const app = express();
 
@@ -58,6 +59,7 @@ app.use(cors({
     const allowedOrigins = [
       process.env.FRONTEND_URL,
       'http://localhost:5174',
+      'http://localhost:3000',
       'https://tododjs.com',
       'https://www.tododjs.com',
       'https://api.tododjs.com',
@@ -149,6 +151,7 @@ app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/stripe', stripeRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/contact', contactRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
