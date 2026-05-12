@@ -1,10 +1,9 @@
 /**
- * Seed MashupCategory from the Category collection.
- * Run this once to populate the MashupCategory collection so the
- * Live Mashups category filter bar works immediately.
+ * Seed MashupCategory with 9 independent music-genre categories.
+ * These are SEPARATE from Record Pool categories (pool brands).
  *
  * Usage (from project root):
- *   node server/scripts/seedMashupCategories.js [--dry-run]
+ *   node server/scripts/seedMashupCategories.js [--dry-run] [--force]
  */
 
 import mongoose from 'mongoose';
@@ -19,47 +18,49 @@ if (!process.env.MONGODB_URI) {
 }
 
 const DRY_RUN = process.argv.includes('--dry-run');
+const FORCE   = process.argv.includes('--force');
+
+const DEFAULT_MASHUP_CATEGORIES = [
+  { name: 'Reggaeton',            color: '#FF6B6B', sortOrder: 0 },
+  { name: 'Old School Reggaeton', color: '#FF9B4A', sortOrder: 1 },
+  { name: 'Dembow',               color: '#FFE066', sortOrder: 2 },
+  { name: 'Trap',                 color: '#C86BFA', sortOrder: 3 },
+  { name: 'House',                color: '#4DD8FF', sortOrder: 4 },
+  { name: 'EDM',                  color: '#86F0B0', sortOrder: 5 },
+  { name: 'Afro House',           color: '#F59E0B', sortOrder: 6 },
+  { name: 'Remember',             color: '#6366F1', sortOrder: 7 },
+  { name: 'International',        color: '#10B981', sortOrder: 8 },
+];
 
 async function run() {
   await mongoose.connect(process.env.MONGODB_URI);
   console.log('Connected to MongoDB');
 
-  const { default: Category }       = await import('../models/Category.js');
   const { default: MashupCategory } = await import('../models/MashupCategory.js');
 
   const existing = await MashupCategory.countDocuments();
-  if (existing > 0 && !process.argv.includes('--force')) {
+  if (existing > 0 && !FORCE) {
     console.log(`MashupCategory already has ${existing} documents. Use --force to re-seed.`);
     await mongoose.disconnect();
     return;
   }
 
-  const categories = await Category.find({ isActive: true }).sort('sortOrder name').lean();
-  console.log(`Found ${categories.length} categories to seed (dry-run: ${DRY_RUN})`);
+  console.log(`Seeding ${DEFAULT_MASHUP_CATEGORIES.length} mashup genre categories (dry-run: ${DRY_RUN})`);
 
   let created = 0;
-  for (const [i, cat] of categories.entries()) {
-    console.log(`  [${i + 1}] "${cat.name}" (color: ${cat.color || 'none'})`);
+  for (const cat of DEFAULT_MASHUP_CATEGORIES) {
+    console.log(`  "${cat.name}" (${cat.color})`);
     if (!DRY_RUN) {
       await MashupCategory.updateOne(
         { name: cat.name },
-        {
-          $setOnInsert: {
-            name:        cat.name,
-            description: cat.description || '',
-            color:       cat.color       || '#7C3AED',
-            thumbnail:   cat.thumbnail   || null,
-            sortOrder:   cat.sortOrder   ?? i,
-            isActive:    true,
-          }
-        },
+        { $setOnInsert: { ...cat, isActive: true } },
         { upsert: true }
       );
       created++;
     }
   }
 
-  console.log(`\nDone. Seeded: ${created} mashup categories.`);
+  console.log(`\nDone. Seeded: ${created} mashup genre categories.`);
   await mongoose.disconnect();
 }
 

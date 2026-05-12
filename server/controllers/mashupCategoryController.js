@@ -1,6 +1,18 @@
 import MashupCategory from '../models/MashupCategory.js';
 import Mashup from '../models/Mashup.js';
 
+const DEFAULT_MASHUP_CATEGORIES = [
+  { name: 'Reggaeton',            color: '#FF6B6B', sortOrder: 0 },
+  { name: 'Old School Reggaeton', color: '#FF9B4A', sortOrder: 1 },
+  { name: 'Dembow',               color: '#FFE066', sortOrder: 2 },
+  { name: 'Trap',                 color: '#C86BFA', sortOrder: 3 },
+  { name: 'House',                color: '#4DD8FF', sortOrder: 4 },
+  { name: 'EDM',                  color: '#86F0B0', sortOrder: 5 },
+  { name: 'Afro House',           color: '#F59E0B', sortOrder: 6 },
+  { name: 'Remember',             color: '#6366F1', sortOrder: 7 },
+  { name: 'International',        color: '#10B981', sortOrder: 8 },
+];
+
 // @desc  Get all active mashup categories with live mashup counts
 // @route GET /api/mashup-categories
 // @access Public
@@ -64,6 +76,25 @@ export const updateMashupCategory = async (req, res) => {
     res.json({ success: true, data: category });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+// @desc  Seed default mashup genre categories (admin only)
+// @route POST /api/mashup-categories/seed
+// @access Admin
+export const seedMashupCategories = async (req, res) => {
+  try {
+    let created = 0;
+    for (const cat of DEFAULT_MASHUP_CATEGORIES) {
+      const existing = await MashupCategory.findOne({ name: cat.name });
+      if (!existing) {
+        await MashupCategory.create({ ...cat, isActive: true });
+        created++;
+      }
+    }
+    res.json({ success: true, message: `Seeded ${created} new mashup categories`, created });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 

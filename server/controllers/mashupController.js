@@ -227,10 +227,12 @@ export const autoCategorizeMashups = async (req, res) => {
 
     for (const m of mashups) {
       const cleanedTitle = cleanMashupTitle(m.title);
-      let { category: detectedCategory, raw: categoryRaw } = await detectCategoryAsync(cleanedTitle, null);
+      const kwCategory = detectMashupCategoryByKeyword(cleanedTitle);
+      let detectedCategory = kwCategory || null;
+      let categoryRaw = kwCategory ? kwCategory.toLowerCase() : null;
       let aiUsed = false;
 
-      if (detectedCategory === 'Others' && useAI && knownNames.length) {
+      if (!detectedCategory && useAI && knownNames.length) {
         const aiCategory = await detectCategoryWithAI(cleanedTitle, m.artist, knownNames);
         if (aiCategory && aiCategory !== 'Others') {
           detectedCategory = aiCategory;
@@ -435,15 +437,17 @@ export const createMashup = async (req, res) => {
     const rawTitle   = title || audioFile.originalname.replace(/\.[^/.]+$/, '');
     const cleanTitle = cleanMashupTitle(rawTitle);
 
-    // Detect pool-brand category from title (e.g. "(Latin Box Edit)" → "Latin Box")
+    // Detect mashup genre category (independent from Record Pool pool-brand categories)
     const trackArtist = artist || 'Unknown Artist';
     let detectedCategory = category || null;
     let categoryRaw = null;
 
     if (!detectedCategory) {
-      const catResult = await detectCategoryAsync(cleanTitle, null);
-      detectedCategory = catResult.category;   // 'Latin Box', 'DJ City', … or 'Others'
-      categoryRaw = catResult.raw;             // raw extracted string
+      const kwCategory = detectMashupCategoryByKeyword(cleanTitle);
+      if (kwCategory) {
+        detectedCategory = kwCategory;
+        categoryRaw = kwCategory.toLowerCase();
+      }
     }
 
     // Detect genre using AI (independent of pool-brand category)

@@ -17,7 +17,8 @@ import {
   Upload,
   X,
   Menu,
-  Tag
+  Tag,
+  Music2
 } from 'lucide-react';
 import AdminOverview from './AdminOverview';
 import AdminTracks from './AdminTracks';
@@ -35,6 +36,7 @@ import AdminDownloadStats from './AdminDownloadStats';
 import UploadProgressTracker from './UploadProgressTracker';
 import AdminMashups from './AdminMashups';
 import AdminCategories from './AdminCategories';
+import AdminMashupCategories from './AdminMashupCategories';
 import AdminUserDevices from './AdminUserDevices';
 import ErrorBoundary from '../ErrorBoundary';
 import API_URL from '../../config/api';
@@ -109,6 +111,7 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
     { id: 'subscriptions', label: t('admin.subscriptions'), icon: CreditCard },
     { id: 'analytics', label: t('admin.analytics'), icon: Database },
     { id: 'categories', label: t('admin.categories'), icon: Tag },
+    { id: 'mashupCategories', label: 'Mashup Categories', icon: Music2 },
     { id: 'genres', label: t('admin.genres'), icon: Palette },
     { id: 'settings', label: t('admin.settings'), icon: Settings },
     { id: 'security', label: t('admin.security'), icon: Shield },
@@ -144,6 +147,8 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
         return <AdminPools />;
       case 'categories':
         return <AdminCategories />;
+      case 'mashupCategories':
+        return <AdminMashupCategories />;
       case 'genres':
         return <AdminGenres />;
       case 'settings':
