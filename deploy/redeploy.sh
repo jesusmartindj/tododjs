@@ -7,7 +7,7 @@
 
 set -e
 
-APP_DIR="/var/www/tododjs"
+APP_DIR="/var/www/stage/tododjs"
 
 echo ">>> Pulling latest code..."
 cd $APP_DIR
@@ -24,7 +24,7 @@ cd $APP_DIR/server
 npm install --production
 
 echo ">>> Restarting API server..."
-pm2 restart tododjs-api
+pm2 restart tododjs-stage-api
 
 echo ">>> Reloading Nginx..."
 sudo nginx -t && sudo systemctl reload nginx
