@@ -37,6 +37,7 @@ export default function ContactModal({ onClose, onSuccess, initialMode = 'login'
       formPayload.append('name', formData.name);
       formPayload.append('email', formData.email);
       formPayload.append('phoneNumber', formData.phoneNumber);
+      formPayload.append('subject', formData.subject);
       formPayload.append('message', formData.message);
       attachmentList.forEach((file, idx) => {
         formPayload.append(`attachment_${idx}`, file);

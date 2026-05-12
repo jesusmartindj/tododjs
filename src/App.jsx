@@ -907,9 +907,9 @@ function App() {
         </Suspense>
         </ErrorBoundary>
         <div>
-          <button className="p-2 ps-5 pe-5 rounded-lg transition-all duration-200 bg-accent text-white shadow-lg shadow-accent/30 fixed bottom-0 right-0 m-4 z-50 hover:scale-105" 
+          <button className="p-2 ps-5 pe-5 rounded-lg transition-all duration-200 bg-accent text-white shadow-lg shadow-accent/30 fixed bottom-0 right-0 m-4 z-50 hover:scale-105 flex items-center gap-2 z-50" 
             onClick={() => setContactModalOpen(true)}>
-              <Mail size={30} className="text-brand-text-tertiary" />
+              <Mail size={30} className="text-brand-text-tertiary" /> Contacto
           </button>
         </div>
         </main>
