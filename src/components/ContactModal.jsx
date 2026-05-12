@@ -36,6 +36,8 @@ export default function ContactModal({ onClose, onSuccess, initialMode = 'login'
         throw new Error(errorData.message || 'Error al enviar el formulario');
       }
 
+      setFormData({ name: '', email: '', phoneNumber: '', message: ''});
+
       setSuccess(true);
     } catch (err) {
       setError(err.message);
