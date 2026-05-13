@@ -25,7 +25,10 @@ export const getMashups = async (req, res) => {
 
     const query = { isPublished: true, tonality: { $exists: true, $nin: [null, ''] } };
     if (genre && genre !== 'all') query.genre = genre;
-    if (category && category !== 'all') query.category = category;
+    if (category && category !== 'all') {
+      const catEsc = category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query.category = { $regex: `^${catEsc}$`, $options: 'i' };
+    }
     if (tonality && tonality !== 'all') query.tonality = tonality;
 
     const total = await Mashup.countDocuments(query);
@@ -211,23 +214,27 @@ export const autoCategorizeMashups = async (req, res) => {
   try {
     const { force = false, dryRun = false, useAI = true } = req.body;
 
-    const OLD_GENRE_CATS = new Set(['Reggaeton', 'Old School Reggaeton', 'Dembow', 'Trap', 'House', 'EDM', 'Afro House', 'Remember', 'International']);
+    const GENRE_CATS = new Set(['Reggaeton', 'Old School Reggaeton', 'Dembow', 'Trap', 'House', 'EDM', 'Afro House', 'Remember', 'International']);
+    // Target mashups that don't yet have a valid genre category
     const filter = force
       ? {}
-      : { $or: [{ category: { $exists: false } }, { category: null }, { category: '' }, { category: { $in: [...OLD_GENRE_CATS] } }, { category: 'Others' }] };
+      : { $or: [{ category: { $exists: false } }, { category: null }, { category: '' }, { category: 'Others' }, { category: { $nin: [...GENRE_CATS] } }] };
 
     const mashups = await Mashup.find(filter).lean();
-    const knownNames = await getKnownCategoryNames();
+    // Use genre category names for AI — independent from Record Pool
+    const knownNames = [...GENRE_CATS];
 
     const results = [];
     let updated = 0;
 
     for (const m of mashups) {
       const cleanedTitle = cleanMashupTitle(m.title);
-      let { category: detectedCategory, raw: categoryRaw } = await detectCategoryAsync(cleanedTitle, null);
+      const kwCategory = detectMashupCategoryByKeyword(cleanedTitle);
+      let detectedCategory = kwCategory || null;
+      let categoryRaw = kwCategory ? kwCategory.toLowerCase() : null;
       let aiUsed = false;
 
-      if (detectedCategory === 'Others' && useAI && knownNames.length) {
+      if (!detectedCategory && useAI && knownNames.length) {
         const aiCategory = await detectCategoryWithAI(cleanedTitle, m.artist, knownNames);
         if (aiCategory && aiCategory !== 'Others') {
           detectedCategory = aiCategory;
@@ -432,15 +439,17 @@ export const createMashup = async (req, res) => {
     const rawTitle   = title || audioFile.originalname.replace(/\.[^/.]+$/, '');
     const cleanTitle = cleanMashupTitle(rawTitle);
 
-    // Detect pool-brand category from title (e.g. "(Latin Box Edit)" → "Latin Box")
+    // Detect mashup genre category (independent from Record Pool pool-brand categories)
     const trackArtist = artist || 'Unknown Artist';
     let detectedCategory = category || null;
     let categoryRaw = null;
 
     if (!detectedCategory) {
-      const catResult = await detectCategoryAsync(cleanTitle, null);
-      detectedCategory = catResult.category;   // 'Latin Box', 'DJ City', … or 'Others'
-      categoryRaw = catResult.raw;             // raw extracted string
+      const kwCategory = detectMashupCategoryByKeyword(cleanTitle);
+      if (kwCategory) {
+        detectedCategory = kwCategory;
+        categoryRaw = kwCategory.toLowerCase();
+      }
     }
 
     // Detect genre using AI (independent of pool-brand category)

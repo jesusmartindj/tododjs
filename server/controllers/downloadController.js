@@ -1,5 +1,6 @@
 import Download from '../models/Download.js';
 import Track from '../models/Track.js';
+import Mashup from '../models/Mashup.js';
 import Album from '../models/Album.js';
 import Source from '../models/Source.js';
 import User from '../models/User.js';
@@ -126,7 +127,7 @@ export const downloadTrack = async (req, res) => {
 // @access  Private
 export const downloadTrackFile = async (req, res) => {
   try {
-    const track = await Track.findById(req.params.id);
+    const track = await Track.findById(req.params.id) || await Mashup.findById(req.params.id);
 
     if (!track) {
       return res.status(404).json({
@@ -310,20 +311,6 @@ export const downloadAlbumFile = async (req, res) => {
     }
     const user = await User.findById(req.user.id);
 
-    // Admin bypasses all subscription checks
-    if (user.role !== 'admin') {
-      const hasPlan = user.subscription?.planId || (user.subscription?.plan && user.subscription.plan !== 'free');
-      const isWithinPeriod = !!user.subscription?.endDate && new Date() <= new Date(user.subscription.endDate);
-      const hasAccess = user.subscription?.status === 'active' || (user.subscription?.status === 'cancelled' && isWithinPeriod);
-      if (!hasPlan || !hasAccess) {
-        return res.status(403).json({
-          success: false,
-          message: 'Bulk album downloads require an active subscription',
-          upgradeRequired: true
-        });
-      }
-    }
-
     await Download.create({
       userId: user._id,
       albumId: album._id,
@@ -390,21 +377,22 @@ export const downloadAlbumFile = async (req, res) => {
 
     archive.pipe(res);
 
-    for (const track of tracks) {
-      const key = track.audioFile?.wasabiKey || track.audioFile?.key;
-      if (!key) continue;
-
-      try {
-        const cmd = new GetObjectCommand({
-          Bucket: process.env.WASABI_BUCKET_NAME,
-          Key: key
-        });
-        const s3Resp = await s3Client.send(cmd);
-        const trackFilename = buildSafeFilename(`${track.artist} - ${track.title}.mp3`);
-        archive.append(s3Resp.Body, { name: trackFilename });
-      } catch (err) {
-        console.error(`Failed to fetch track ${track._id} (${key}):`, err.message);
-      }
+    // Fetch up to 5 tracks concurrently from Wasabi then append to archive
+    const CONCURRENCY = 5;
+    for (let i = 0; i < tracks.length; i += CONCURRENCY) {
+      const batch = tracks.slice(i, i + CONCURRENCY);
+      await Promise.all(batch.map(async (track) => {
+        const key = track.audioFile?.wasabiKey || track.audioFile?.key;
+        if (!key) return;
+        try {
+          const cmd = new GetObjectCommand({ Bucket: process.env.WASABI_BUCKET_NAME, Key: key });
+          const s3Resp = await s3Client.send(cmd);
+          const trackFilename = buildSafeFilename(`${track.artist} - ${track.title}.mp3`);
+          archive.append(s3Resp.Body, { name: trackFilename });
+        } catch (err) {
+          console.error(`Failed to fetch track ${track._id} (${key}):`, err.message);
+        }
+      }));
     }
 
     await archive.finalize();

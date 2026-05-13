@@ -206,7 +206,9 @@ userSchema.methods.canDownload = function() {
   // Also treat cancelled-but-within-period as active (cancel_at_period_end retention)
   const isWithinPeriod = !!this.subscription.endDate && new Date() <= new Date(this.subscription.endDate);
   const hasActiveSubscription =
-    (this.subscription.status === 'active' || (this.subscription.status === 'cancelled' && isWithinPeriod)) &&
+    (this.subscription.status === 'active' ||
+     (this.subscription.status === 'cancelled' && isWithinPeriod) ||
+     (this.subscription.status === 'past_due' && isWithinPeriod)) &&
     (this.subscription.planId || (this.subscription.plan && this.subscription.plan !== 'free'));
   
   const limits = {
@@ -215,13 +217,13 @@ userSchema.methods.canDownload = function() {
     pro: Infinity
   };
   
-  // If user has active subscription, allow unlimited downloads
+  // If user has active subscription, allow downloads
   if (hasActiveSubscription) {
     return true;
   }
   
-  // Otherwise apply free tier limits
-  return this.downloads.today < limits.free;
+  // Free / non-subscribed users cannot download at all
+  return false;
 };
 
 // Increment download count

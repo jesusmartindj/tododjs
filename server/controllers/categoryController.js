@@ -1,6 +1,7 @@
 import Category from '../models/Category.js';
 import Track from '../models/Track.js';
 import Mashup from '../models/Mashup.js';
+import Album from '../models/Album.js';
 
 import { clearCategoryCache } from '../services/categoryDetection.js';
 
@@ -13,10 +14,14 @@ export const getCategories = async (req, res) => {
     const filter = includeInactive ? {} : { isActive: true };
     const categories = await Category.find(filter).sort('sortOrder name').lean();
 
-    // Attach live track + mashup counts per category
-    const [trackCounts, mashupCounts, totalMashups] = await Promise.all([
+    // Attach live track + album + mashup counts per category
+    const [trackCounts, albumCounts, mashupCounts, totalMashups] = await Promise.all([
       Track.aggregate([
         { $match: { status: 'published', category: { $ne: null } } },
+        { $group: { _id: '$category', count: { $sum: 1 } } }
+      ]),
+      Album.aggregate([
+        { $match: { isActive: true, category: { $nin: [null, ''] } } },
         { $group: { _id: '$category', count: { $sum: 1 } } }
       ]),
       Mashup.aggregate([
@@ -25,12 +30,14 @@ export const getCategories = async (req, res) => {
       ]),
       Mashup.countDocuments({ isPublished: true })
     ]);
-    const countMap = Object.fromEntries(trackCounts.map(c => [c._id, c.count]));
+    const countMap       = Object.fromEntries(trackCounts.map(c => [c._id, c.count]));
+    const albumCountMap  = Object.fromEntries(albumCounts.map(c => [c._id, c.count]));
     const mashupCountMap = Object.fromEntries(mashupCounts.map(c => [c._id, c.count]));
 
     const data = categories.map(c => ({
       ...c,
-      trackCount: countMap[c.name] || 0,
+      trackCount:  countMap[c.name]  || 0,
+      albumCount:  albumCountMap[c.name] || 0,
       // live-mashups is a navigation hub: show total published mashup count
       mashupCount: c.slug === 'live-mashups' ? totalMashups : (mashupCountMap[c.name] || 0)
     }));
@@ -98,8 +105,11 @@ export const updateCategory = async (req, res) => {
       const exists = await Category.findOne({ $or: [{ name }, { slug: newSlug }], _id: { $ne: category._id } });
       if (exists) return res.status(400).json({ success: false, message: 'A category with that name already exists' });
 
-      // Rename the category on all tracks too
-      await Track.updateMany({ category: category.name }, { $set: { category: name.trim() } });
+      // Rename the category on all tracks AND albums
+      await Promise.all([
+        Track.updateMany({ category: category.name }, { $set: { category: name.trim() } }),
+        Album.updateMany({ category: category.name }, { $set: { category: name.trim() } })
+      ]);
 
       category.name = name.trim();
       category.slug = newSlug;
@@ -127,8 +137,11 @@ export const deleteCategory = async (req, res) => {
     const category = await Category.findById(req.params.id);
     if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
 
-    // Unset category on all tracks that reference it
-    await Track.updateMany({ category: category.name }, { $set: { category: null } });
+    // Unset category on all tracks AND albums that reference it
+    await Promise.all([
+      Track.updateMany({ category: category.name }, { $set: { category: null } }),
+      Album.updateMany({ category: category.name }, { $set: { category: null } })
+    ]);
 
     await category.deleteOne();
     clearCategoryCache();

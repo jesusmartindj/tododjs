@@ -23,6 +23,11 @@ export const requireSubscription = async (req, res, next) => {
       return next();
     }
 
+    // Admin-granted subscriptions may not have a Stripe planId — allow them through
+    if (!user.subscription.planId && user.subscription.grantedByAdmin) {
+      return next();
+    }
+
     const hasPlan = user.subscription.planId || (user.subscription.plan && user.subscription.plan !== 'free');
 
     // Stripe fallback: if cancelled + stripeSubscriptionId still set + endDate missing/stale,
@@ -99,7 +104,9 @@ export const checkDeviceLimit = async (req, res, next) => {
 
     const deviceId = req.headers['x-device-id'] || req.body.deviceId || req.query.deviceId;
 
+    // Direct download links (?token=) are browser navigations — no custom headers possible
     if (!deviceId) {
+      if (req.query.token) return next();
       return res.status(400).json({
         success: false,
         message: 'Device ID required'
@@ -114,10 +121,8 @@ export const checkDeviceLimit = async (req, res, next) => {
     const plan = await SubscriptionPlan.findOne({ planId: user.subscription.planId });
 
     if (!plan) {
-      return res.status(400).json({
-        success: false,
-        message: 'No active subscription plan'
-      });
+      console.warn(`⚠️  checkDeviceLimit: no SubscriptionPlan doc for planId="${user.subscription.planId}" — skipping device limit`);
+      return next();
     }
 
     // Auto-cleanup inactive devices (90+ days)
