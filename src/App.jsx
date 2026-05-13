@@ -317,7 +317,16 @@ function App() {
         .then(res => res.json())
         .then(data => {
           if (data?.success) {
-            setSearchResults(data.data || []);
+            const normalized = (data.data || []).map(t => ({
+              ...t,
+              id: t._id,
+              source: t.type === 'mashup' ? 'mashup' : 'track',
+              dateAdded: t.createdAt,
+              collection: t.genre || '',
+              pool: '',
+              locked: false,
+            }));
+            setSearchResults(normalized);
           } else {
             setSearchResults([]);
           }
