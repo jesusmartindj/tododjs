@@ -463,7 +463,7 @@ function App() {
 
       const trackId = track.id || track._id;
       const token = localStorage.getItem('token');
-      window.open(`${API}/downloads/track/${trackId}/file?token=${encodeURIComponent(token)}`, '_blank', 'noopener,noreferrer');
+      window.location.href = `${API}/downloads/track/${trackId}/file?token=${encodeURIComponent(token)}`;
       return;
     }
   };
@@ -661,7 +661,7 @@ function App() {
     }
 
     const token = localStorage.getItem('token');
-    window.open(`${API}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}`, '_blank', 'noopener,noreferrer');
+    window.location.href = `${API}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}`;
   };
 
   const allTracks = useMemo(() => {
