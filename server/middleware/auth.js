@@ -65,29 +65,6 @@ export const protect = async (req, res, next) => {
       });
     }
 
-    // Per-request device enforcement for active subscribers (paid only, not admin)
-    const hasActiveSubscription =
-      req.user.role !== 'admin' &&
-      req.user.subscription?.status === 'active' &&
-      req.user.subscription?.planId;
-
-    if (hasActiveSubscription) {
-      const registeredDevices = req.user.subscription?.devices || [];
-
-      // Only enforce if the client sends a device ID AND the user already has registered devices
-      // (avoids locking out legacy sessions that predate device tracking)
-      if (deviceId && registeredDevices.length > 0) {
-        const isRegistered = registeredDevices.some(d => d.deviceId === deviceId);
-        if (!isRegistered) {
-          return res.status(401).json({
-            success: false,
-            message: 'This device is not authorized on your account. Please log in again.',
-            code: 'DEVICE_NOT_REGISTERED'
-          });
-        }
-      }
-    }
-
     next();
   } catch (error) {
     return res.status(401).json({

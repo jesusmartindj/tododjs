@@ -114,10 +114,8 @@ export const checkDeviceLimit = async (req, res, next) => {
     const plan = await SubscriptionPlan.findOne({ planId: user.subscription.planId });
 
     if (!plan) {
-      return res.status(400).json({
-        success: false,
-        message: 'No active subscription plan'
-      });
+      console.warn(`⚠️  checkDeviceLimit: no SubscriptionPlan doc for planId="${user.subscription.planId}" — skipping device limit`);
+      return next();
     }
 
     // Auto-cleanup inactive devices (90+ days)

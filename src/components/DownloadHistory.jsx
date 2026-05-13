@@ -100,7 +100,7 @@ export default function DownloadHistory({ onTrackInteraction }) {
                 className="flex items-center gap-3 p-2.5 rounded-lg bg-white/[0.02] hover:bg-white/[0.05] transition-colors group cursor-pointer"
                 onClick={() => {
                   if (track && onTrackInteraction) {
-                    onTrackInteraction({ type: 'play', track: { id: track._id, title: track.title, artist: track.artist, coverArt: track.coverArt } });
+                    onTrackInteraction('play', { id: track._id, title: track.title, artist: track.artist, coverArt: track.coverArt });
                   }
                 }}
               >
