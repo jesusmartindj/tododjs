@@ -1147,10 +1147,9 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
                   }
                 }
               }
-              // Skip track if artist still unresolvable
+              // If artist still unresolvable, keep 'Unknown Artist' and continue processing
               if (!metadata.artist || _UNKNOWN_RE.test(metadata.artist)) {
-                console.log(`      Skipping ${path.basename(mp3FileName)} — artist could not be determined`);
-                continue;
+                metadata.artist = 'Unknown Artist';
               }
 
               const tonalityResult = await withTimeout(
@@ -1860,6 +1859,7 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
           collectionId: collection._id,
           datePackId: datePack._id,
           albumId: album._id,
+          sourceId: collection.sourceId || undefined,
           title: metadata.title,
           artist: metadata.artist,
           genre: genreResult.genre || album.genre || 'Others',
@@ -1881,6 +1881,7 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
             size: trackSize,
             duration: metadata.duration
           },
+          versionType: 'Original Mix',
           uploadedBy: collection.uploadedBy,
           status: 'published'
         });
