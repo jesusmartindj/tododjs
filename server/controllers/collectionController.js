@@ -820,7 +820,7 @@ export const uploadCollection = async (req, res) => {
 
     // Background: process the ZIP file via queue (prevents concurrent stalling)
     enqueueCollection(
-      () => processCollectionAsync(collection._id, zipFile.path, collection, createdDatePacks, createdAlbums),
+      () => processCollectionAsync(collection._id, zipFile.path, collection, createdDatePacks, createdAlbums, { categoryOverride: categoryOverride || null }),
       collection._id
     );
   } catch (error) {
@@ -871,6 +871,7 @@ export const previewZipStructures = async (req, res) => {
 };
 
 async function processCollectionAsync(collectionId, zipFilePath, collection, createdDatePacks, createdAlbums, opts = {}) {
+  const { categoryOverride = null } = opts;
   const tempDir = path.dirname(zipFilePath);
   const tempFilesToClean = [];
   try {
