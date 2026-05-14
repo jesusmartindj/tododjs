@@ -267,11 +267,8 @@ async function processAlbumTracksAsync(album, mp3Files, source, datePack, coverA
           bpm: detectedBpm || metadata.bpm || 128,
           tonality,
           pool: source.name,
-<<<<<<< HEAD
-=======
           category: album.category || 'Premium Pack',
           categoryRaw: album.categoryRaw || null,
->>>>>>> 8b0742c088e1fc2ba969f932001a8110e7f6134a
           coverArt: trackCoverArt,
           coverArtKey: trackCoverArtKey,
           audioFile: {
