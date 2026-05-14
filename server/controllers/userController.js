@@ -140,7 +140,11 @@ export const updateUser = async (req, res) => {
         user.subscription.planId = plan; // keep plan and planId in sync for admin grants
         user.subscription.status = 'active';
         if (!user.subscription.startDate) user.subscription.startDate = new Date();
-        user.subscription.endDate      = null;
+        // Only null endDate for true admin-grants (no Stripe sub). If Stripe manages this
+        // subscription, keep the existing endDate so access doesn't become unlimited.
+        if (!user.subscription.stripeSubscriptionId) {
+          user.subscription.endDate = null;
+        }
         user.subscription.grantedByAdmin = true;
       } else {
         user.subscription.plan   = 'free';
