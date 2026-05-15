@@ -284,7 +284,7 @@ async function handleInvoicePaid(invoice) {
 
   const user = await User.findOne({
     $or: [
-      { 'subscription.stripeSubscriptionId': subscriptionId },
+//      { 'subscription.stripeSubscriptionId': subscriptionId },
       { 'subscription.stripeCustomerId': customerId }
     ]
   });
@@ -329,7 +329,7 @@ async function handleInvoicePaymentFailed(invoice) {
 
   const user = await User.findOne({
     $or: [
-      { 'subscription.stripeSubscriptionId': subscriptionId },
+//      { 'subscription.stripeSubscriptionId': subscriptionId },
       { 'subscription.stripeCustomerId': customerId }
     ]
   });
