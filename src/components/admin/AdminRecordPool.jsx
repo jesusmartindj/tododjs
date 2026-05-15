@@ -718,16 +718,18 @@ function CollectionEditModal({ collection, onClose, onSuccess }) {
   const [year, setYear] = useState(collection?.year || new Date().getFullYear());
   const [platform, setPlatform] = useState(collection?.platform || '');
   const [sourceId, setSourceId] = useState(collection?.sourceId?._id || collection?.sourceId || '');
-  const [sources, setSources] = useState([]);
+  const [poolCategory, setPoolCategory] = useState(collection?.poolCategory || '');
+  const [poolCategories, setPoolCategories] = useState([]);
   const [thumbFile, setThumbFile] = useState(null);
   const [thumbUrl, setThumbUrl] = useState(collection?.thumbnail || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetch(`${API}/sources`)
+    const token = localStorage.getItem('token');
+    fetch(`${API}/categories?all=true`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
       .then(r => r.json())
-      .then(d => { if (d.success) setSources(d.data || []); })
+      .then(d => { if (d.success) setPoolCategories(d.data || []); })
       .catch(() => {});
   }, []);
 
@@ -741,6 +743,7 @@ function CollectionEditModal({ collection, onClose, onSuccess }) {
       fd.append('year', year);
       fd.append('platform', platform);
       if (sourceId) fd.append('sourceId', sourceId);
+      if (poolCategory !== undefined) fd.append('poolCategory', poolCategory);
       if (thumbFile) fd.append('thumbnailFile', thumbFile);
       else if (thumbUrl) fd.append('thumbnail', thumbUrl);
       const res = await fetch(`${API}/collections/${collection._id}`, {
@@ -780,9 +783,9 @@ function CollectionEditModal({ collection, onClose, onSuccess }) {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Assign to Pool (Source)</label>
-            <select value={sourceId} onChange={e => setSourceId(e.target.value)} className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-sm">
-              <option value="">— No pool assigned —</option>
-              {sources.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
+            <select value={poolCategory} onChange={e => setPoolCategory(e.target.value)} className="w-full px-4 py-2 bg-white border border-white/10 rounded-lg focus:outline-none focus:border-accent text-sm text-gray-900">
+              <option value="" className="text-gray-900 bg-white">— No pool assigned —</option>
+              {poolCategories.map(c => <option key={c._id} value={c.name} className="text-gray-900 bg-white">{c.name}</option>)}
             </select>
             <p className="text-xs text-brand-text-tertiary mt-1">Albums will become visible under this pool&apos;s genre tab.</p>
           </div>

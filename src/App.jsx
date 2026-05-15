@@ -325,7 +325,16 @@ function App() {
         .then(res => res.json())
         .then(data => {
           if (data?.success) {
-            setSearchResults(data.data || []);
+            const normalized = (data.data || []).map(t => ({
+              ...t,
+              id: t._id,
+              source: t.type === 'mashup' ? 'mashup' : 'track',
+              dateAdded: t.createdAt,
+              collection: t.genre || '',
+              pool: '',
+              locked: false,
+            }));
+            setSearchResults(normalized);
           } else {
             setSearchResults([]);
           }
@@ -382,9 +391,11 @@ function App() {
   const handleTrackInteraction = (action, track) => {
     if (action === 'play') {
       // Capture queue from current page context for next/prev navigation
-      const contextQueue = (selectedAlbumDetail && !albumDetailLoading && albumDetailTracks.length)
-        ? albumDetailTracks
-        : liveTracks.length ? liveTracks : [track];
+      const contextQueue = searchOpen && searchResults.length
+        ? searchResults
+        : (selectedAlbumDetail && !albumDetailLoading && albumDetailTracks.length)
+          ? albumDetailTracks
+          : liveTracks.length ? liveTracks : [track];
       setPanelQueue(contextQueue);
       setPanelOpen(true);
       setPanelHidden(false);

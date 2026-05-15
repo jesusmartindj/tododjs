@@ -32,7 +32,8 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
   const [uploadPhase, setUploadPhase] = useState('upload'); // 'upload' | 'cards'
 
   useEffect(() => {
-    fetch(`${API_URL}/sources`)
+    const token = localStorage.getItem('token');
+    fetch(`${API_URL}/categories?all=true`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
       .then(r => r.json())
       .then(d => { if (d.success) setSources(d.data || []); })
       .catch(() => {});
@@ -532,7 +533,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
       );
       formData.append('year', new Date().getFullYear().toString());
       formData.append('month', (new Date().getMonth() + 1).toString().padStart(2, '0'));
-      if (item.overrides?.sourceId) formData.append('sourceId', item.overrides.sourceId);
+      if (item.overrides?.sourceId) formData.append('poolCategory', item.overrides.sourceId);
 
       if (item.scanResult) {
         formData.append(
@@ -1373,7 +1374,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                             >
                               <option value="">— No pool assigned —</option>
                               {sources.map(s => (
-                                <option key={s._id} value={s._id}>{s.name}</option>
+                                <option key={s._id} value={s.name}>{s.name}</option>
                               ))}
                             </select>
                             <div className="text-xs text-brand-text-tertiary mt-1">Albums from this collection will appear under the selected pool's genre tab.</div>

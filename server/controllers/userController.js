@@ -1,6 +1,7 @@
 import User from '../models/User.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import { uploadToWasabi, deleteFromWasabi, getSignedDownloadUrl } from '../config/wasabi.js';
+import stripe from '../config/stripe.js';
 
 // @desc    Get all users with search, pagination, stats
 // @route   GET /api/users
@@ -140,7 +141,11 @@ export const updateUser = async (req, res) => {
         user.subscription.planId = plan; // keep plan and planId in sync for admin grants
         user.subscription.status = 'active';
         if (!user.subscription.startDate) user.subscription.startDate = new Date();
-        user.subscription.endDate      = null;
+        // Only null endDate for true admin-grants (no Stripe sub). If Stripe manages this
+        // subscription, keep the existing endDate so access doesn't become unlimited.
+        if (!user.subscription.stripeSubscriptionId) {
+          user.subscription.endDate = null;
+        }
         user.subscription.grantedByAdmin = true;
       } else {
         user.subscription.plan   = 'free';
@@ -353,6 +358,59 @@ export const getSharingSuspects = async (req, res) => {
 
     res.status(200).json({ success: true, data: suspects });
   } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Sync a user's subscription endDate from Stripe
+// @route   POST /api/users/:id/sync-stripe
+// @access  Private/Admin
+export const syncUserStripeSubscription = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Use stored ID or the one manually provided by the admin
+    const stripeSubscriptionId = user.subscription?.stripeSubscriptionId || req.body?.stripeSubscriptionId;
+    if (!stripeSubscriptionId) {
+      return res.status(400).json({ success: false, message: 'No Stripe Subscription ID found. Paste it from the Stripe Dashboard.' });
+    }
+
+    const stripeSub = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+
+    // Persist the subscription ID if it wasn't stored yet (e.g. webhook missed on first purchase)
+    if (!user.subscription.stripeSubscriptionId) {
+      user.subscription.stripeSubscriptionId = stripeSubscriptionId;
+    }
+    if (stripeSub.customer && !user.subscription.stripeCustomerId) {
+      user.subscription.stripeCustomerId = stripeSub.customer;
+    }
+
+    const newEndDate = stripeSub.current_period_end
+      ? new Date(stripeSub.current_period_end * 1000)
+      : null;
+
+    const statusMap = { active: 'active', canceled: 'cancelled', past_due: 'past_due', unpaid: 'past_due', paused: 'inactive', trialing: 'active' };
+    const newStatus = statusMap[stripeSub.status] || user.subscription.status;
+
+    if (newEndDate) user.subscription.endDate = newEndDate;
+    user.subscription.status = newStatus;
+    user.subscription.cancelAtPeriodEnd = stripeSub.cancel_at_period_end || false;
+    await user.save();
+
+    console.log(`[Admin] Synced Stripe sub for user ${user._id}: status=${newStatus}, endDate=${newEndDate}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Subscription synced from Stripe.',
+      data: {
+        endDate: user.subscription.endDate,
+        status: user.subscription.status,
+        cancelAtPeriodEnd: user.subscription.cancelAtPeriodEnd
+      }
+    });
+  } catch (error) {
+    console.error('[syncUserStripeSubscription] Error:', error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 };
