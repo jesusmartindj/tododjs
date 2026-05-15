@@ -1,10 +1,8 @@
-import Stripe from 'stripe';
 import User from '../models/User.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
+import stripe from '../config/stripe.js';
 import { parseDeviceInfo, cleanupInactiveDevices } from '../utils/deviceParser.js';
 import { sendEmail, getDeviceBlockedEmailTemplate, getNewDeviceEmailTemplate } from '../services/emailService.js';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // Check if user has active subscription
 export const requireSubscription = async (req, res, next) => {
